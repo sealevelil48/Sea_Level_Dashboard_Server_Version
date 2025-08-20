@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GOVMAP</title>
+    <script src="https://www.govmap.gov.il/govmap/api/govmap.api.js"></script>
+</head>
+<body>
+    <div id="map" style="width: 100%; height: 500px;"></div>
+    <script>
+        window.onload = function() {
+            govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e"; // Replace with valid token
+            fetch('http://localhost:8000/stations/map')
+                .then(response => response.json())
+                .then(data => {
+                    govmap.createMap("map", {
+                        token: govmap.token,
+                        layers: [],
+                        center: [data[0].x, data[0].y],
+                        zoom: 10
+                    });
+                    data.forEach(station => {
+                        govmap.drawGeometries([{
+                            geometryType: govmap.geometryType.circle,
+                            data: { x: station.x, y: station.y, radius: 100 },
+                            style: { fillColor: 'red', borderColor: 'black' }
+                        }]);
+                    });
+                });
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+sea-level-project/
+├── frontend/
+│   ├── public/
+│   │   ├── index.html
+│   │   └── assets/
+│   │       ├── Mapi_Logo2.png
+│   │       └── style.css
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Filters.js
+│   │   │   ├── StatsCards.js
+│   │   │   ├── GraphView.js
+│   │   │   ├── TableView.js
+│   │   │   └── MapView.js
+│   │   ├── App.js
+│   │   ├── App.css
+│   │   └── index.js
+│   └── package.json
+│
+└── backend/
+    ├── shared/
+    │   ├── database.py
+    │   ├── data_processing.py
+    │   └── utils.py
+    │
+    └── lambdas/
+        ├── get_stations/
+        │   ├── main.py
+        │   └── requirements.txt
+        ├── get_yesterday_data/
+        │   ├── main.py
+        │   └── requirements.txt
+        ├── get_live_data/
+        │   ├── main.py
+        │   └── requirements.txt
+        ├── get_data/
+        │   ├── main.py
+        │   └── requirements.txt
+        ├── get_predictions/
+        │   ├── main.py
+        │   └── requirements.txt
+        └── get_station_map/
+            ├── main.py
+            └── requirements.txt
