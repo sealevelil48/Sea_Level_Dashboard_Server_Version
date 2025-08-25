@@ -64,9 +64,24 @@ const TableView = ({ filters, apiBaseUrl }) => {
       <tbody>
         {tableData.length > 0 ? tableData.map((row, index) => (
           <tr key={index}>
-            {columns.map(col => (
-              <td key={col.id}>{typeof row[col.id] === 'number' ? row[col.id].toFixed(3) : row[col.id]}</td>
-            ))}
+            {columns.map(col => {
+              let cellContent;
+              if (col.id === 'Tab_DateTime' || col.id === 'Date') {
+                cellContent = moment(row[col.id]).format('YYYY-MM-DD HH:mm:ss');
+              } else if (col.id === 'HighTideTime' || col.id === 'LowTideTime') {
+                cellContent = moment(row[col.id]).format('HH:mm:ss');
+              } else if (typeof row[col.id] === 'number') {
+                cellContent = row[col.id].toFixed(3);
+              } else {
+                cellContent = row[col.id];
+              }
+
+              return (
+                <td key={col.id}>
+                  {cellContent}
+                </td>
+              );
+            })}
           </tr>
         )) : (
           <tr>

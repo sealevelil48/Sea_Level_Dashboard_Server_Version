@@ -259,12 +259,14 @@ function App() {
 
   // AUTO-UPDATE: Fetch data when filters or stations change - FIXED
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchData();
-    }, 300); // Debounce data fetching
-    
-    return () => clearTimeout(timeoutId);
-  }, [filters.startDate, filters.endDate, filters.dataType, filters.showAnomalies, selectedStations]);
+    if (stations.length > 0) {
+      const timeoutId = setTimeout(() => {
+        fetchData();
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [fetchData, stations.length]);
 
   // SEPARATE EFFECT: Handle predictions to prevent infinite loops
   useEffect(() => {
@@ -641,28 +643,33 @@ function App() {
     window.URL.revokeObjectURL(url);
   };
 
-  // Map component
-  const MapView = () => {
+  // Map component - Fixed to prevent state conflicts
+  const MapView = useCallback(() => {
     if (mapTab === 'govmap') {
       return (
-        <div style={{ width: '100%', height: '500px', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
+        <div key="govmap-container" style={{ width: '100%', height: '500px', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
           <iframe
-            src={`${API_BASE_URL}/mapframe`}
+            key={`govmap-${Date.now()}`}
+            src={`${API_BASE_URL}/mapframe?t=${Date.now()}`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="GovMap"
+            loading="eager"
           />
         </div>
       );
     } else {
       return (
-        <OSMMap 
-          stations={stations.filter(s => s !== 'All Stations')}
-          currentStation={selectedStations[0]}
-          mapData={graphData}
-        />
+        <div key="osm-container">
+          <OSMMap 
+            key="osm-map"
+            stations={stations.filter(s => s !== 'All Stations')}
+            currentStation={selectedStations[0]}
+            mapData={graphData}
+          />
+        </div>
       );
     }
-  };
+  }, [mapTab, stations, selectedStations, graphData]);
 
   return (
     <div className="dash-container">

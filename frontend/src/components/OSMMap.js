@@ -1,5 +1,5 @@
-// frontend/src/components/OSMMap.js - Fixed version without loops
-import React, { useEffect, useRef } from 'react';
+// frontend/src/components/OSMMap.js - Fixed version with proper centering
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -15,6 +15,7 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
+  const [isVisible, setIsVisible] = useState(false);
 
   // Station coordinates (Israel)
   const stationCoordinates = {
@@ -26,64 +27,126 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
     'Yafo': [32.0535, 34.7503]
   };
 
-  // Initialize map once
+  // Check visibility
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
-
-    try {
-      mapInstanceRef.current = L.map(mapRef.current).setView([31.5, 34.8], 7);
-      
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 18
-      }).addTo(mapInstanceRef.current);
-
-      // Add initial markers
-      Object.entries(stationCoordinates).forEach(([station, coords]) => {
-        const marker = L.marker(coords).addTo(mapInstanceRef.current);
-        marker.bindTooltip(station);
-        markersRef.current[station] = marker;
-      });
-    } catch (error) {
-      console.error('Map initialization error:', error);
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    
+    if (mapRef.current) {
+      observer.observe(mapRef.current);
     }
+    
+    return () => observer.disconnect();
   }, []);
+
+  // Initialize map when visible
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current || !isVisible) return;
+
+    const initMap = () => {
+      try {
+        mapInstanceRef.current = L.map(mapRef.current, {
+          center: [31.5, 34.8],
+          zoom: 7,
+          zoomControl: true
+        });
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 18
+        }).addTo(mapInstanceRef.current);
+
+        // Add markers with click handlers
+        Object.entries(stationCoordinates).forEach(([station, coords]) => {
+          const marker = L.marker(coords).addTo(mapInstanceRef.current);
+          marker.bindTooltip(station);
+          marker.bindPopup(`<h4>${station}</h4><p>Loading data...</p>`);
+          markersRef.current[station] = marker;
+
+          // Update popup on click
+          marker.on('click', () => {
+            const stationData = mapData?.filter(d => d.Station === station) || [];
+            const latestData = stationData.length > 0 ? stationData[stationData.length - 1] : null;
+            
+            if (latestData) {
+              const popupContent = `
+                <div style="font-family: Arial, sans-serif; min-width: 200px;">
+                  <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
+                  <p><strong>Sea Level:</strong> ${latestData.Tab_Value_mDepthC1?.toFixed(3) || 'N/A'} m</p>
+                  <p><strong>Temperature:</strong> ${latestData.Tab_Value_monT2m?.toFixed(1) || 'N/A'} °C</p>
+                  <p><strong>Last Update:</strong> ${latestData.Tab_DateTime ? new Date(latestData.Tab_DateTime).toLocaleString() : 'N/A'}</p>
+                </div>
+              `;
+              marker.setPopupContent(popupContent);
+            }
+          });
+        });
+
+        // Center map properly after everything loads
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+            const group = new L.featureGroup(Object.values(markersRef.current));
+            mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
+          }
+        }, 300);
+        
+      } catch (error) {
+        console.error('Map initialization error:', error);
+      }
+    };
+
+    setTimeout(initMap, 100);
+  }, [isVisible]);
 
   // Update marker popups when data changes
   useEffect(() => {
-    if (!mapInstanceRef.current || !mapData || mapData.length === 0) return;
+    console.log('OSMMap useEffect triggered. mapData:', mapData?.length || 0, 'mapInstance:', !!mapInstanceRef.current);
+    
+    if (!mapInstanceRef.current) return;
 
-    // Debounce updates to prevent excessive re-renders
-    const timeoutId = setTimeout(() => {
-      Object.entries(markersRef.current).forEach(([station, marker]) => {
-        const stationData = mapData.find(d => d.Station === station);
+    Object.entries(markersRef.current).forEach(([station, marker]) => {
+      if (!marker) return;
+      
+      if (mapData && mapData.length > 0) {
+        const stationData = mapData.filter(d => d.Station === station);
+        const latestData = stationData.length > 0 ? stationData[stationData.length - 1] : null;
         
-        if (stationData) {
+        if (latestData) {
           const popupContent = `
             <div style="font-family: Arial, sans-serif; min-width: 200px;">
               <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
-              <p><strong>Sea Level:</strong> ${stationData.Tab_Value_mDepthC1?.toFixed(3) || 'N/A'} m</p>
-              <p><strong>Temperature:</strong> ${stationData.Tab_Value_monT2m?.toFixed(1) || 'N/A'} °C</p>
-              <p><strong>Last Update:</strong> ${stationData.Tab_DateTime ? new Date(stationData.Tab_DateTime).toLocaleString() : 'N/A'}</p>
+              <p><strong>Sea Level:</strong> ${latestData.Tab_Value_mDepthC1?.toFixed(3) || 'N/A'} m</p>
+              <p><strong>Temperature:</strong> ${latestData.Tab_Value_monT2m?.toFixed(1) || 'N/A'} °C</p>
+              <p><strong>Last Update:</strong> ${latestData.Tab_DateTime ? new Date(latestData.Tab_DateTime).toLocaleString() : 'N/A'}</p>
+              <p><strong>Data Points:</strong> ${stationData.length}</p>
             </div>
           `;
           marker.bindPopup(popupContent);
+          console.log(`Updated popup for ${station} with ${stationData.length} data points`);
         } else {
-          marker.bindPopup(`<h4>${station}</h4><p>No data available</p>`);
+          marker.bindPopup(`<h4>${station}</h4><p>No data found for this station</p>`);
         }
-      });
-    }, 100);
-
-    return () => clearTimeout(timeoutId);
+      } else {
+        marker.bindPopup(`<h4>${station}</h4><p>Loading data...</p>`);
+      }
+    });
   }, [mapData]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          console.warn('Map cleanup warning:', e);
+        }
         mapInstanceRef.current = null;
         markersRef.current = {};
+        setIsVisible(false);
       }
     };
   }, []);
