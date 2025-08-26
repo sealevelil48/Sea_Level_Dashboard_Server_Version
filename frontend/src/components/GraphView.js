@@ -34,7 +34,7 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
     const fetchData = async () => {
       try {
         const response = await fetch(
-          `${apiBaseUrl}/data?station=${filters.station}&start_date=${moment(filters.startDate).format('YYYY-MM-DD')}&end_date=${moment(filters.endDate).format('YYYY-MM-DD')}&data_source=${filters.dataType}&show_anomalies=${filters.showAnomalies}`
+          `${apiBaseUrl}/data?station=${filters.station}&start_date=${new Date(filters.startDate).toISOString().split('T')[0]}&end_date=${new Date(filters.endDate).toISOString().split('T')[0]}&data_source=${filters.dataType}&show_anomalies=${filters.showAnomalies}`
         );
         const data = await response.json();
         if (!data || data.length === 0) {
@@ -47,7 +47,7 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
         if (filters.dataType === 'default') {
           const df = data.map(item => ({
             ...item,
-            Tab_DateTime: new Date(item.Tab_DateTime)
+            Tab_DateTime: new Date(item.Tab_DateTime + (item.Tab_DateTime.endsWith('Z') ? '' : 'Z'))
           }));
 
           let mainTrace = {

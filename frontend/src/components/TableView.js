@@ -1,6 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Table } from 'react-bootstrap';
-import moment from 'moment';
+
+const COLUMN_MAPPINGS = {
+  tides: {
+    "Date": "Date",
+    "Station": "Station",
+    "HighTide": "High Tide (m)",
+    "HighTideTime": "High Tide Time",
+    "HighTideTemp": "High Tide Temp (°C)",
+    "LowTide": "Low Tide (m)",
+    "LowTideTime": "Low Tide Time",
+    "LowTideTemp": "Low Tide Temp (°C)",
+    "anomaly": "Anomaly"
+  },
+  default: {
+    "Tab_DateTime": "Date/Time",
+    "Station": "Station",
+    "Tab_Value_mDepthC1": "Sea Level (m)",
+    "Tab_Value_monT2m": "Water Temp (°C)"
+  }
+};
+
+const NO_DATA_MESSAGE = "No data available";
+
+const formatCellContent = (value, columnId) => {
+  if (columnId === 'Tab_DateTime' || columnId === 'Date') {
+    try {
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? value : date.toLocaleString('sv-SE').replace('T', ' ');
+    } catch {
+      return value;
+    }
+  } else if (columnId === 'HighTideTime' || columnId === 'LowTideTime') {
+    if (value && typeof value === 'string' && value.includes(':')) {
+      const timeParts = value.split(':');
+      return timeParts.length === 2 ? value + ':00' : value;
+    }
+    return value;
+  } else if (typeof value === 'number') {
+    return value.toFixed(3);
+  }
+  return value;
+};
 
 const TableView = ({ filters, apiBaseUrl }) => {
   const [tableData, setTableData] = useState([]);
@@ -9,9 +50,14 @@ const TableView = ({ filters, apiBaseUrl }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const startDate = new Date(filters.startDate).toISOString().split('T')[0];
+        const endDate = new Date(filters.endDate).toISOString().split('T')[0];
         const response = await fetch(
-          `${apiBaseUrl}/data?station=${filters.station}&start_date=${moment(filters.startDate).format('YYYY-MM-DD')}&end_date=${moment(filters.endDate).format('YYYY-MM-DD')}&data_source=${filters.dataType}`
+          `${apiBaseUrl}/data?station=${filters.station}&start_date=${startDate}&end_date=${endDate}&data_source=${filters.dataType}`
         );
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
         if (!data || data.length === 0) {
           setTableData([]);
@@ -19,22 +65,7 @@ const TableView = ({ filters, apiBaseUrl }) => {
           return;
         }
 
-        const columnMapping = filters.dataType === 'tides' ? {
-          "Date": "Date",
-          "Station": "Station",
-          "HighTide": "High Tide (m)",
-          "HighTideTime": "High Tide Time",
-          "HighTideTemp": "High Tide Temp (°C)",
-          "LowTide": "Low Tide (m)",
-          "LowTideTime": "Low Tide Time",
-          "LowTideTemp": "Low Tide Temp (°C)",
-          "anomaly": "Anomaly"
-        } : {
-          "Tab_DateTime": "Date/Time",
-          "Station": "Station",
-          "Tab_Value_mDepthC1": "Sea Level (m)",
-          "Tab_Value_monT2m": "Water Temp (°C)"
-        };
+        const columnMapping = COLUMN_MAPPINGS[filters.dataType] || COLUMN_MAPPINGS.default;
 
         const cols = Object.keys(data[0]).map(col => ({
           name: columnMapping[col] || col,
@@ -52,6 +83,21 @@ const TableView = ({ filters, apiBaseUrl }) => {
     fetchData();
   }, [filters, apiBaseUrl]);
 
+  const formattedData = useMemo(() => {
+    if (!tableData?.length || !columns?.length) return [];
+    return tableData.map((row, index) => {
+      if (!row) return { key: `invalid-${index}`, formatted: {} };
+      const key = `${row.Station || 'unknown'}-${row.Date || row.Tab_DateTime || index}`;
+      const formatted = {};
+      columns.forEach(col => {
+        if (col?.id) {
+          formatted[col.id] = formatCellContent(row[col.id], col.id);
+        }
+      });
+      return { key, formatted };
+    });
+  }, [tableData, columns]);
+
   return (
     <Table striped bordered hover responsive className="dash-table">
       <thead>
@@ -62,30 +108,17 @@ const TableView = ({ filters, apiBaseUrl }) => {
         </tr>
       </thead>
       <tbody>
-        {tableData.length > 0 ? tableData.map((row, index) => (
-          <tr key={index}>
-            {columns.map(col => {
-              let cellContent;
-              if (col.id === 'Tab_DateTime' || col.id === 'Date') {
-                cellContent = moment(row[col.id]).format('YYYY-MM-DD HH:mm:ss');
-              } else if (col.id === 'HighTideTime' || col.id === 'LowTideTime') {
-                cellContent = moment(row[col.id]).format('HH:mm:ss');
-              } else if (typeof row[col.id] === 'number') {
-                cellContent = row[col.id].toFixed(3);
-              } else {
-                cellContent = row[col.id];
-              }
-
-              return (
-                <td key={col.id}>
-                  {cellContent}
-                </td>
-              );
-            })}
+        {formattedData.length > 0 ? formattedData.map((row) => (
+          <tr key={row.key}>
+            {columns.map(col => (
+              <td key={col.id}>
+                {row.formatted[col.id]}
+              </td>
+            ))}
           </tr>
         )) : (
           <tr>
-            <td colSpan={columns.length}>No data available</td>
+            <td colSpan={columns.length}>{NO_DATA_MESSAGE}</td>
           </tr>
         )}
       </tbody>
@@ -93,4 +126,4 @@ const TableView = ({ filters, apiBaseUrl }) => {
   );
 };
 
-export default TableView;
+export default React.memo(TableView);

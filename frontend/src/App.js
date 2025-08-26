@@ -922,7 +922,7 @@ function App() {
                                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                                 .map((row, idx) => (
                                 <tr key={idx}>
-                                  <td>{filters.dataType === 'tides' ? row.Date : new Date(row.Tab_DateTime).toLocaleString()}</td>
+                                  <td>{filters.dataType === 'tides' ? row.Date : new Date(row.Tab_DateTime).toISOString().replace('T', ' ').replace('.000Z', '')}</td>
                                   <td>{row.Station}</td>
                                   {filters.dataType === 'tides' ? (
                                     <>
