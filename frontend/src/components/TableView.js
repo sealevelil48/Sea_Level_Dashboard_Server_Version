@@ -50,8 +50,8 @@ const TableView = ({ filters, apiBaseUrl }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const startDate = new Date(filters.startDate).toISOString().split('T')[0];
-        const endDate = new Date(filters.endDate).toISOString().split('T')[0];
+        const startDate = filters.startDate && !isNaN(new Date(filters.startDate)) ? new Date(filters.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+        const endDate = filters.endDate && !isNaN(new Date(filters.endDate)) ? new Date(filters.endDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
         const response = await fetch(
           `${apiBaseUrl}/data?station=${filters.station}&start_date=${startDate}&end_date=${endDate}&data_source=${filters.dataType}`
         );

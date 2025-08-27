@@ -863,7 +863,16 @@ function App() {
             {/* Tabs */}
             <Card>
               <Card.Body>
-                <Tabs activeKey={activeTab} onSelect={setActiveTab} className="mb-3">
+                <Tabs activeKey={activeTab} onSelect={(key) => {
+                  setActiveTab(key);
+                  if (key === 'graph') {
+                    setTimeout(() => {
+                      if (plotRef.current?.el) {
+                        window.Plotly.Plots.resize(plotRef.current.el);
+                      }
+                    }, 100);
+                  }
+                }} className="mb-3">
                   <Tab eventKey="graph" title="Graph View">
                     {loading ? (
                       <div className="text-center p-5">
@@ -878,6 +887,7 @@ function App() {
                         layout={createPlot().layout}
                         config={{ responsive: true }}
                         style={{ width: '100%', height: '400px' }}
+                        useResizeHandler={true}
                       />
                     ) : (
                       <div className="text-center p-5">
@@ -922,7 +932,7 @@ function App() {
                                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                                 .map((row, idx) => (
                                 <tr key={idx}>
-                                  <td>{filters.dataType === 'tides' ? row.Date : new Date(row.Tab_DateTime).toISOString().replace('T', ' ').replace('.000Z', '')}</td>
+                                  <td>{filters.dataType === 'tides' ? row.Date : (row.Tab_DateTime && !isNaN(new Date(row.Tab_DateTime)) ? new Date(row.Tab_DateTime).toISOString().replace('T', ' ').replace('.000Z', '') : 'Invalid Date')}</td>
                                   <td>{row.Station}</td>
                                   {filters.dataType === 'tides' ? (
                                     <>

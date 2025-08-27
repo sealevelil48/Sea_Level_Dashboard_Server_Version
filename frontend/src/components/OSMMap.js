@@ -76,7 +76,7 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
                   <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
                   <p><strong>Sea Level:</strong> ${latestData.Tab_Value_mDepthC1?.toFixed(3) || 'N/A'} m</p>
                   <p><strong>Temperature:</strong> ${latestData.Tab_Value_monT2m?.toFixed(1) || 'N/A'} °C</p>
-                  <p><strong>Last Update:</strong> ${latestData.Tab_DateTime ? new Date(latestData.Tab_DateTime).toLocaleString() : 'N/A'}</p>
+                  <p><strong>Last Update:</strong> ${latestData.Tab_DateTime && !isNaN(new Date(latestData.Tab_DateTime)) ? new Date(latestData.Tab_DateTime).toISOString().replace('T', ' ').replace('.000Z', '') : 'N/A'}</p>
                 </div>
               `;
               marker.setPopupContent(popupContent);
@@ -120,7 +120,7 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
               <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
               <p><strong>Sea Level:</strong> ${latestData.Tab_Value_mDepthC1?.toFixed(3) || 'N/A'} m</p>
               <p><strong>Temperature:</strong> ${latestData.Tab_Value_monT2m?.toFixed(1) || 'N/A'} °C</p>
-              <p><strong>Last Update:</strong> ${latestData.Tab_DateTime ? new Date(latestData.Tab_DateTime).toLocaleString() : 'N/A'}</p>
+              <p><strong>Last Update:</strong> ${latestData.Tab_DateTime ? new Date(latestData.Tab_DateTime).toISOString().replace('T', ' ').replace('.000Z', '') : 'N/A'}</p>
               <p><strong>Data Points:</strong> ${stationData.length}</p>
             </div>
           `;
