@@ -81,7 +81,9 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
-        "http://127.0.0.1:3001"
+        "http://127.0.0.1:3001",
+        "http://sea-level-dash-local:3000",
+        "http://sea-level-dash-local:8001"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -541,85 +543,87 @@ async def get_station_map():
         logger.error(f"Error in get_station_map: {e}")
         return {"error": str(e), "stations": []}
 
+@app.get("/api/stations/map")
+async def get_api_station_map():
+    """Get station map data - API endpoint matching Python version"""
+    if not LAMBDA_HANDLERS_AVAILABLE:
+        return []
+    
+    try:
+        event = {}
+        response = get_station_map_handler(event, None)
+        data = lambda_response_to_fastapi(response)
+        # Return the data directly as array, not wrapped in response object
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.error(f"Error in get_api_station_map: {e}")
+        return []
+
 @app.get("/mapframe")
 async def get_mapframe():
-    """Serve GovMap iframe for development"""
+    """Serve GovMap iframe matching working Python version"""
     html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>GOVMAP - Sea Level Stations</title>
-        <script src="https://www.govmap.gov.il/govmap/api/govmap.api.js"></script>
-        <style>
-            body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-            #map { width: 100%; height: 500px; }
-            .loading { 
-                display: flex; 
-                justify-content: center; 
-                align-items: center; 
-                height: 500px; 
-                background: #f0f0f0;
-            }
-        </style>
-    </head>
-    <body>
-        <div id="loading" class="loading">
-            <div>Loading GovMap...</div>
-        </div>
-        <div id="map" style="display: none;"></div>
-        <script>
-            window.onload = function() {
-                try {
-                    // Initialize GovMap
-                    if (typeof govmap !== 'undefined') {
-                        govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e";
-                        
-                        // Create map centered on Israel
-                        govmap.createMap("map", {
-                            token: govmap.token,
-                            layers: [],
-                            center: [35.0, 31.5], // Israel center
-                            zoom: 7
-                        });
-                        
-                        // Show map, hide loading
-                        document.getElementById('loading').style.display = 'none';
-                        document.getElementById('map').style.display = 'block';
-                        
-                        // Add station markers
-                        const stations = [
-                            {name: 'Acre', x: 35.0818, y: 32.9269},
-                            {name: 'Ashdod', x: 34.6553, y: 31.8044},
-                            {name: 'Ashkelon', x: 34.5664, y: 31.6658},
-                            {name: 'Eilat', x: 34.9482, y: 29.5581},
-                            {name: 'Haifa', x: 34.9983, y: 32.8191},
-                            {name: 'Yafo', x: 34.7503, y: 32.0535}
-                        ];
-                        
-                        stations.forEach(station => {
-                            govmap.drawGeometries([{
-                                geometryType: govmap.geometryType.circle,
-                                data: { x: station.x, y: station.y, radius: 500 },
-                                style: { fillColor: 'blue', borderColor: 'darkblue', borderWidth: 2 },
-                                tooltip: station.name + ' - Sea Level Station'
-                            }]);
-                        });
-                    } else {
-                        throw new Error('GovMap API not loaded');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GovMap View</title>
+    <script src="https://www.govmap.gov.il/govmap/api/govmap.api.js"></script>
+    <style>
+        html, body, #map-container {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map-container"></div>
+
+    <script>
+        console.log('Setting token:', '11aa3021-4ae0-4771-8ae0-df75e73fe73e');
+        govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e";
+        
+        console.log('Token set to:', govmap.token);
+        console.log('Current domain:', window.location.hostname);
+
+        govmap.createMap('map-container', {
+            token: "11aa3021-4ae0-4771-8ae0-df75e73fe73e",
+            layers: [],
+            center: { x: 176505, y: 662250 },
+            zoom: 0,
+            basemap: '2',
+            isPopupOpen: false
+        });
+
+        // Simple test geometry without API call
+        setTimeout(() => {
+            console.log('Attempting to display test geometry...');
+            try {
+                const result = govmap.displayGeometries({
+                    circleGeometries: [{
+                        x: 176505,
+                        y: 662250,
+                        radius: 1000
+                    }],
+                    names: ['Test Station'],
+                    geometryType: govmap.geometryType.CIRCLE,
+                    clearExisting: true,
+                    defaultSymbol: {
+                        outlineColor: [255, 0, 0, 1],
+                        outlineWidth: 3,
+                        fillColor: [255, 0, 0, 0.5]
                     }
-                } catch (error) {
-                    console.error('GovMap initialization error:', error);
-                    document.getElementById('loading').innerHTML = 
-                        '<div style="text-align: center; color: #666;">'
-                        + '<h3>GovMap Unavailable</h3>'
-                        + '<p>Unable to load GovMap API</p>'
-                        + '<p>This is a development environment</p>'
-                        + '</div>';
-                }
-            };
-        </script>
-    </body>
-    </html>
+                });
+                console.log('displayGeometries result:', result);
+            } catch(error) {
+                console.error('displayGeometries error:', error);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
     """
     return HTMLResponse(content=html_content)
 

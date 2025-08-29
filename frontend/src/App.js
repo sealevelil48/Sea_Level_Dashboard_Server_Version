@@ -6,7 +6,7 @@ import OSMMap from './components/OSMMap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://sea-level-dash-local:8001';
 
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -647,26 +647,23 @@ function App() {
   const MapView = useCallback(() => {
     if (mapTab === 'govmap') {
       return (
-        <div key="govmap-container" style={{ width: '100%', height: '500px', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: '500px', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
           <iframe
-            key={`govmap-${Date.now()}`}
-            src={`${API_BASE_URL}/mapframe?t=${Date.now()}`}
+            src={`${API_BASE_URL}/mapframe`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="GovMap"
-            loading="eager"
+            allow="geolocation; accelerometer; clipboard-write"
+            sandbox="allow-scripts allow-same-origin allow-forms"
           />
         </div>
       );
     } else {
       return (
-        <div key="osm-container">
-          <OSMMap 
-            key="osm-map"
-            stations={stations.filter(s => s !== 'All Stations')}
-            currentStation={selectedStations[0]}
-            mapData={graphData}
-          />
-        </div>
+        <OSMMap 
+          stations={stations.filter(s => s !== 'All Stations')}
+          currentStation={selectedStations[0]}
+          mapData={graphData}
+        />
       );
     }
   }, [mapTab, stations, selectedStations, graphData]);
