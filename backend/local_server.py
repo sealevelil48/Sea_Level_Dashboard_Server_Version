@@ -561,66 +561,98 @@ async def get_api_station_map():
 
 @app.get("/mapframe")
 async def get_mapframe():
-    """Serve GovMap iframe matching working Python version"""
+    """Serve GovMap iframe with station data"""
     html_content = """
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>GovMap View</title>
+    <title>GOVMAP - Sea Level Stations</title>
     <script src="https://www.govmap.gov.il/govmap/api/govmap.api.js"></script>
     <style>
-        html, body, #map-container {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            width: 100%;
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 500px; }
+        .loading { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 500px; 
+            background: #f0f0f0;
+            color: #333;
+        }
+        .error {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 500px;
+            background: #ffe6e6;
+            color: #d00;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-    <div id="map-container"></div>
-
+    <div id="loading" class="loading">
+        <div>Loading GovMap...</div>
+    </div>
+    <div id="map" style="display: none;"></div>
+    <div id="error" class="error" style="display: none;">
+        <div>
+            <h3>GovMap Unavailable</h3>
+            <p>Unable to load GovMap API or station data</p>
+        </div>
+    </div>
     <script>
-        console.log('Setting token:', '11aa3021-4ae0-4771-8ae0-df75e73fe73e');
-        govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e";
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('map').style.display = 'none';
+            document.getElementById('error').style.display = 'flex';
+            console.error('GovMap Error:', message);
+        }
         
-        console.log('Token set to:', govmap.token);
-        console.log('Current domain:', window.location.hostname);
-
-        govmap.createMap('map-container', {
-            token: "11aa3021-4ae0-4771-8ae0-df75e73fe73e",
-            layers: [],
-            center: { x: 176505, y: 662250 },
-            zoom: 0,
-            basemap: '2',
-            isPopupOpen: false
-        });
-
-        // Simple test geometry without API call
-        setTimeout(() => {
-            console.log('Attempting to display test geometry...');
-            try {
-                const result = govmap.displayGeometries({
-                    circleGeometries: [{
-                        x: 176505,
-                        y: 662250,
-                        radius: 1000
-                    }],
-                    names: ['Test Station'],
-                    geometryType: govmap.geometryType.CIRCLE,
-                    clearExisting: true,
-                    defaultSymbol: {
-                        outlineColor: [255, 0, 0, 1],
-                        outlineWidth: 3,
-                        fillColor: [255, 0, 0, 0.5]
-                    }
-                });
-                console.log('displayGeometries result:', result);
-            } catch(error) {
-                console.error('displayGeometries error:', error);
-            }
-        }, 5000);
+        function showMap() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('map').style.display = 'block';
+        }
+        
+        let mapInstance;
+        let stationsData = [];
+        
+        try {
+            govmap.createMap('map', {
+                token: '11aa3021-4ae0-4771-8ae0-df75e73fe73e'
+            });
+            
+            setTimeout(() => {
+                fetch('/stations/map')
+                .then(response => response.json())
+                .then(stations => {
+                    var data = {
+                        circleGeometries: stations.map(s => ({ x: s.x, y: s.y, radius: 500 })),
+                        names: stations.map(s => s.Station),
+                        geometryType: govmap.geometryType.CIRCLE,
+                        defaultSymbol: {
+                            outlineColor: [255, 0, 0, 1],
+                            outlineWidth: 2,
+                            fillColor: [255, 0, 0, 0.5]
+                        },
+                        clearExisting: true,
+                        data: {
+                            tooltips: stations.map(s => `${s.Station}: ${s.latest_value}m`),
+                            headers: stations.map(s => s.Station),
+                            bubbleHTML: '<div style="padding:10px;"><strong>Station:</strong> {0}<br/><strong>Sea Level:</strong> {1} m<br/><strong>Last Update:</strong> {2}</div>',
+                            bubbleHTMLParameters: stations.map(s => [s.Station, s.latest_value, s.last_update])
+                        }
+                    };
+                    
+                    govmap.displayGeometries(data);
+                    showMap();
+                })
+                .catch(err => showError('Failed: ' + err.message));
+            }, 3000);
+        } catch (error) {
+            showError('Map init failed: ' + error.message);
+        }
     </script>
 </body>
 </html>

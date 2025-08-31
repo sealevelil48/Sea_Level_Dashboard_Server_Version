@@ -51,6 +51,9 @@
             document.getElementById('map').style.display = 'block';
         }
         
+        let mapInstance;
+        let stationsData = [];
+        
         window.onload = function() {
             try {
                 if (typeof govmap === 'undefined') {
@@ -59,35 +62,107 @@
                 
                 govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e";
                 
-                fetch('http://localhost:8000/stations/map')
+                fetch('http://localhost:8001/stations/map')
                     .then(response => {
+                        console.log('Fetch response status:', response.status);
                         if (!response.ok) {
                             throw new Error(`HTTP ${response.status}`);
                         }
                         return response.json();
                     })
                     .then(data => {
+                        console.log('Received station data:', data);
+                        
                         if (!Array.isArray(data) || data.length === 0) {
                             throw new Error('No station data');
                         }
                         
-                        govmap.createMap("map", {
+                        stationsData = data;
+                        console.log('Stations loaded:', stationsData.length);
+                        
+                        // Create map using ITM coordinates (Israeli coordinate system)
+                        mapInstance = govmap.createMap("map", {
                             token: govmap.token,
                             layers: [],
-                            center: [35.0, 31.5],
-                            zoom: 7
+                            center: { x: 176505, y: 662250 }, // ITM center for Israel
+                            zoom: 0,
+                            basemap: '2'
                         });
                         
-                        data.forEach(station => {
-                            govmap.drawGeometries([{
-                                geometryType: govmap.geometryType.circle,
-                                data: { x: station.x, y: station.y, radius: 500 },
-                                style: { fillColor: 'blue', borderColor: 'darkblue', borderWidth: 2 },
-                                tooltip: station.name + ' - Sea Level Station'
-                            }]);
+                        console.log('Map created successfully');
+                        
+                        // Convert WGS84 to ITM coordinates for each station
+                        const convertToITM = (lon, lat) => {
+                            // Approximate conversion for Israeli coordinates
+                            // This is a simplified conversion - in production use proper projection library
+                            const x = (lon - 34.0) * 111320 * Math.cos(lat * Math.PI / 180) + 150000;
+                            const y = (lat - 29.5) * 111320 + 500000;
+                            return { x: Math.round(x), y: Math.round(y) };
+                        };
+                        
+                        // Create geometries for all stations
+                        const circleGeometries = [];
+                        const names = [];
+                        
+                        data.forEach((station, index) => {
+                            const itm = convertToITM(station.longitude, station.latitude);
+                            console.log(`Station ${station.name}: WGS84(${station.longitude}, ${station.latitude}) -> ITM(${itm.x}, ${itm.y})`);
+                            
+                            circleGeometries.push({
+                                x: itm.x,
+                                y: itm.y,
+                                radius: 2000
+                            });
+                            
+                            names.push(`${station.name} - ${station.latest_value}m`);
+                        });
+                        
+                        console.log('Displaying geometries:', circleGeometries.length, 'circles');
+                        
+                        // Display all geometries at once
+                        const result = govmap.displayGeometries({
+                            circleGeometries: circleGeometries,
+                            names: names,
+                            geometryType: govmap.geometryType.CIRCLE,
+                            clearExisting: true,
+                            defaultSymbol: {
+                                outlineColor: [255, 0, 0, 1],
+                                outlineWidth: 3,
+                                fillColor: [255, 0, 0, 0.5]
+                            }
+                        });
+                        
+                        console.log('displayGeometries result:', result);
+                        
+                        // Add click event for popups
+                        govmap.onEvent('click', function(event) {
+                            console.log('Map clicked:', event);
+                            if (event && event.name) {
+                                // Find station by name
+                                const stationName = event.name.split(' - ')[0];
+                                const station = stationsData.find(s => s.name === stationName);
+                                if (station) {
+                                    console.log('Showing popup for:', station.name);
+                                    const itm = convertToITM(station.longitude, station.latitude);
+                                    
+                                    govmap.displayPopup({
+                                        x: itm.x,
+                                        y: itm.y,
+                                        content: `
+                                            <div style="font-family: Arial, sans-serif; padding: 10px; min-width: 200px;">
+                                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${station.name} Station</h4>
+                                                <p style="margin: 5px 0;"><strong>Latest Value:</strong> ${station.latest_value} m</p>
+                                                <p style="margin: 5px 0;"><strong>Last Update:</strong> ${station.last_update}</p>
+                                                <p style="margin: 5px 0;"><strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}</p>
+                                            </div>
+                                        `
+                                    });
+                                }
+                            }
                         });
                         
                         showMap();
+                        console.log('GovMap loaded successfully with', data.length, 'stations');
                     })
                     .catch(error => {
                         showError('Failed to load: ' + error.message);
@@ -97,6 +172,14 @@
                 showError('Init failed: ' + error.message);
             }
         };
+        
+        // Listen for station updates from parent
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'UPDATE_STATIONS') {
+                stationsData = event.data.stations;
+                console.log('Received updated station data:', stationsData.length, 'stations');
+            }
+        });
     </script>
 </body>
 </html>
