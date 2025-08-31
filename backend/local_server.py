@@ -628,19 +628,19 @@ async def get_mapframe():
                 .then(response => response.json())
                 .then(stations => {
                     var data = {
-                        circleGeometries: stations.map(s => ({ x: s.x, y: s.y, radius: 500 })),
+                        wkts: stations.map(s => `POINT(${s.x} ${s.y})`),
                         names: stations.map(s => s.Station),
-                        geometryType: govmap.geometryType.CIRCLE,
+                        geometryType: govmap.geometryType.POINT,
                         defaultSymbol: {
-                            outlineColor: [255, 0, 0, 1],
-                            outlineWidth: 2,
-                            fillColor: [255, 0, 0, 0.5]
+                            url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                            width: 32,
+                            height: 32
                         },
                         clearExisting: true,
                         data: {
                             tooltips: stations.map(s => `${s.Station}: ${s.latest_value}m`),
                             headers: stations.map(s => s.Station),
-                            bubbleHTML: '<div style="padding:10px;"><strong>Station:</strong> {0}<br/><strong>Sea Level:</strong> {1} m<br/><strong>Last Update:</strong> {2}</div>',
+                            bubbleHTML: '<div style="padding:10px; text-align:left; direction:ltr;"><strong>Station:</strong> {0}<br/><strong>Sea Level:</strong> {1} m<br/><strong>Last Update:</strong> {2}</div>',
                             bubbleHTMLParameters: stations.map(s => [s.Station, s.latest_value, s.last_update])
                         }
                     };
