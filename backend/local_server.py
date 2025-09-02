@@ -530,13 +530,17 @@ async def get_predictions(
         return {"error": str(e), "arima": None, "prophet": None}
 
 @app.get("/stations/map")
-async def get_station_map():
+async def get_station_map(end_date: str = None):
     """Get station map data"""
     if not LAMBDA_HANDLERS_AVAILABLE:
         return {"message": "Demo map data - Lambda handlers not available", "stations": []}
     
     try:
-        event = {}
+        event = {
+            "queryStringParameters": {
+                "end_date": end_date
+            } if end_date else {}
+        }
         response = get_station_map_handler(event, None)
         return lambda_response_to_fastapi(response)
     except Exception as e:
@@ -560,8 +564,12 @@ async def get_api_station_map():
         return []
 
 @app.get("/mapframe")
-async def get_mapframe():
+async def get_mapframe(end_date: str = None):
     """Serve GovMap iframe with station data"""
+    logger.info(f"mapframe requested with end_date: {end_date}")
+    # Inject the end_date into the HTML
+    end_date_js = f"'{end_date}'" if end_date else "'2025-09-02'"
+    
     html_content = """
 <!DOCTYPE html>
 <html>
@@ -624,7 +632,10 @@ async def get_mapframe():
             });
             
             setTimeout(() => {
-                fetch('/stations/map')
+                // Get end_date from injected variable
+                const endDate = """ + end_date_js + """;
+                console.log('MapFrame end_date:', endDate);
+                fetch(`/stations/map?end_date=${endDate}`)
                 .then(response => response.json())
                 .then(stations => {
                     var data = {

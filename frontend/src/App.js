@@ -649,7 +649,7 @@ function App() {
       return (
         <div style={{ width: '100%', height: '500px', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
           <iframe
-            src={`${API_BASE_URL}/mapframe`}
+            src={`${API_BASE_URL}/mapframe?end_date=${filters.endDate}`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="GovMap"
             allow="geolocation; accelerometer; clipboard-write"
@@ -666,7 +666,7 @@ function App() {
         />
       );
     }
-  }, [mapTab, stations, selectedStations, graphData]);
+  }, [mapTab, stations, selectedStations, graphData, filters.endDate]);
 
   return (
     <div className="dash-container">

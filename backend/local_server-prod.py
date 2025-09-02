@@ -13,7 +13,7 @@ app = FastAPI()
 # Enable CORS for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://www.govmap.gov.il"]
+    allow_origins=["http://localhost:3000", "https://www.govmap.gov.il", "http://your-server-ip:3000", "http://your-domain.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
