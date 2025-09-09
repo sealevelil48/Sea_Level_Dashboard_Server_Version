@@ -1,0 +1,329 @@
+/* frontend/src/App.css - Complete styling with all features */
+
+/* Global Styles */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #0c1c35 !important;
+  color: white;
+}
+
+.dash-container {
+  background-color: #0c1c35;
+  min-height: 100vh;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(90deg, #0a172c, #142950);
+  padding: 12px 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1e3c72;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+  color: white !important;
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: linear-gradient(90deg, #ffffff, #a0c8f0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: flex;
+  align-items: center;
+}
+
+#current-time {
+  color: #4dabf5;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+/* Cards */
+.card {
+  background-color: #142950 !important;
+  border: none !important;
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.filters-card {
+  height: calc(100vh - 120px);
+  overflow-y: auto;
+  position: sticky;
+  top: 20px;
+}
+
+/* Stats Cards */
+.stat-card {
+  background-color: #1e3c72 !important;
+  transition: all 0.3s ease;
+  margin-bottom: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.stat-card.green {
+  background-color: #2a4a8c !important;
+}
+
+.stat-card.green .stat-value {
+  color: #34d399 !important;
+}
+
+.stat-card.red {
+  background-color: #2a4a8c !important;
+}
+
+.stat-card.red .stat-value {
+  color: #f87171 !important;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #a0c8f0;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: white !important;
+  margin: 5px 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Form Controls */
+.form-label {
+  color: #a0c8f0 !important;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.form-control, .form-select {
+  background-color: white !important;
+  color: black !important;
+  border: 1px solid #2a4a8c;
+  border-radius: 6px;
+}
+
+.form-control:focus, .form-select:focus {
+  background-color: white !important;
+  color: black !important;
+  border-color: #1e6bc4;
+  box-shadow: 0 0 0 0.2rem rgba(30, 107, 196, 0.25);
+}
+
+.form-check-input {
+  background-color: #2a4a8c;
+  border-color: #2a4a8c;
+}
+
+.form-check-input:checked {
+  background-color: #1e6bc4;
+  border-color: #1e6bc4;
+}
+
+.form-check-label {
+  color: #a0c8f0 !important;
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: #1e6bc4 !important;
+  border-color: #1e6bc4 !important;
+  border-radius: 6px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #1557a8 !important;
+  border-color: #1557a8 !important;
+  transform: translateY(-1px);
+}
+
+.btn-outline-primary {
+  color: #1e6bc4 !important;
+  border-color: #1e6bc4 !important;
+  background-color: transparent !important;
+}
+
+.btn-outline-primary:hover {
+  background-color: #1e6bc4 !important;
+  color: white !important;
+}
+
+/* Tabs */
+.nav-tabs {
+  border-bottom: 1px solid #2a4a8c;
+}
+
+.nav-tabs .nav-link {
+  color: #a0c8f0;
+  border: none;
+  background-color: transparent;
+  padding: 8px 24px;
+  transition: all 0.3s ease;
+  border-radius: 6px 6px 0 0;
+  font-weight: 500;
+}
+
+.nav-tabs .nav-link:hover {
+  color: white;
+  background-color: #142950;
+}
+
+.nav-tabs .nav-link.active {
+  color: white;
+  background-color: #1e6bc4;
+  border-color: #1e6bc4;
+  font-weight: 700;
+}
+
+/* Table */
+.table-dark {
+  background-color: transparent !important;
+}
+
+.table-dark th {
+  background-color: #1e3c72 !important;
+  color: white;
+  border-color: #2a4a8c !important;
+  font-weight: bold;
+  padding: 12px;
+}
+
+.table-dark td {
+  background-color: #2a4a8c !important;
+  color: white;
+  border-color: #2a4a8c !important;
+  padding: 10px;
+}
+
+.table-striped tbody tr:nth-of-type(odd) td {
+  background-color: #1e3c72 !important;
+}
+
+/* Plot Container */
+.js-plotly-plot {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Map Container */
+.map-panel {
+  background-color: transparent !important;
+  border: 1px solid #2a4a8c;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #142950;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a4a8c;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1e6bc4;
+}
+
+/* Loading Spinner */
+.spinner-border {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Animation for stats cards */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-card {
+  animation: fadeInUp 0.5s ease forwards;
+}
+
+/* Custom Map Styles */
+.custom-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-popup .leaflet-popup-content-wrapper {
+  background-color: #142950;
+  color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.custom-popup .leaflet-popup-tip {
+  background-color: #142950;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .stat-card {
+    min-width: calc(50% - 10px);
+  }
+}
+
+@media (max-width: 768px) {
+  .filters-card {
+    height: auto;
+    position: static;
+    margin-bottom: 20px;
+  }
+  
+  .stat-card {
+    min-width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .navbar-brand {
+    font-size: 1.2rem;
+  }
+  
+  #current-time {
+    font-size: 14px;
+  }
+}

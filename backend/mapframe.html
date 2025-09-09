@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GOVMAP - Sea Level Stations</title>
+    <script src="https://www.govmap.gov.il/govmap/api/govmap.api.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 500px; }
+        .loading { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 500px; 
+            background: #f0f0f0;
+            color: #333;
+        }
+        .error {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 500px;
+            background: #ffe6e6;
+            color: #d00;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div>Loading GovMap...</div>
+    </div>
+    <div id="map" style="display: none;"></div>
+    <div id="error" class="error" style="display: none;">
+        <div>
+            <h3>GovMap Unavailable</h3>
+            <p>Unable to load GovMap API or station data</p>
+            <p>This may be due to network issues or API limitations</p>
+        </div>
+    </div>
+    <script>
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('map').style.display = 'none';
+            document.getElementById('error').style.display = 'flex';
+            console.error('GovMap Error:', message);
+        }
+        
+        function showMap() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('map').style.display = 'block';
+        }
+        
+        let mapInstance;
+        let stationsData = [];
+        
+        window.onload = function() {
+            try {
+                if (typeof govmap === 'undefined') {
+                    throw new Error('GovMap API not loaded');
+                }
+                
+                govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e";
+                
+                // Function to fetch and display stations
+                const fetchAndDisplayStations = (endDate) => {
+                    console.log('Fetching stations for date:', endDate);
+                    fetch(`/stations/map?end_date=${endDate}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!Array.isArray(data) || data.length === 0) {
+                                throw new Error('No station data');
+                            }
+                            
+                            stationsData = data;
+                            
+                            // Clear existing geometries and display new ones
+                            const circleGeometries = [];
+                            const names = [];
+                            
+                            data.forEach((station) => {
+                                const itm = convertToITM(station.longitude, station.latitude);
+                                circleGeometries.push({
+                                    x: itm.x,
+                                    y: itm.y,
+                                    radius: 2000
+                                });
+                                names.push(`${station.name} - ${station.latest_value}m`);
+                            });
+                            
+                            govmap.displayGeometries({
+                                circleGeometries: circleGeometries,
+                                names: names,
+                                geometryType: govmap.geometryType.CIRCLE,
+                                clearExisting: true,
+                                defaultSymbol: {
+                                    outlineColor: [255, 0, 0, 1],
+                                    outlineWidth: 3,
+                                    fillColor: [255, 0, 0, 0.5]
+                                }
+                            });
+                            
+                            showMap();
+                        })
+                        .catch(error => showError('Failed: ' + error.message));
+                };
+                
+                // Listen for date updates from parent
+                window.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'UPDATE_DATE') {
+                        console.log('Received date update:', event.data.payload);
+                        fetchAndDisplayStations(event.data.payload);
+                    }
+                });
+                
+                // Initial load
+                fetchAndDisplayStations('2025-09-02')
+                
+                // Create map and conversion function
+                mapInstance = govmap.createMap("map", {
+                    token: govmap.token,
+                    layers: [],
+                    center: { x: 176505, y: 662250 },
+                    zoom: 0,
+                    basemap: '2'
+                });
+                
+                // Convert WGS84 to ITM coordinates
+                const convertToITM = (lon, lat) => {
+                    const x = (lon - 34.0) * 111320 * Math.cos(lat * Math.PI / 180) + 150000;
+                    const y = (lat - 29.5) * 111320 + 500000;
+                    return { x: Math.round(x), y: Math.round(y) };
+                };
+                
+                // Add click event for popups
+                govmap.onEvent('click', function(event) {
+                    if (event && event.name) {
+                        const stationName = event.name.split(' - ')[0];
+                        const station = stationsData.find(s => s.name === stationName);
+                        if (station) {
+                            const itm = convertToITM(station.longitude, station.latitude);
+                            govmap.displayPopup({
+                                x: itm.x,
+                                y: itm.y,
+                                content: `
+                                    <div style="font-family: Arial, sans-serif; padding: 10px; min-width: 200px;">
+                                        <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${station.name} Station</h4>
+                                        <p style="margin: 5px 0;"><strong>Latest Value:</strong> ${station.latest_value} m</p>
+                                        <p style="margin: 5px 0;"><strong>Last Update:</strong> ${station.last_update}</p>
+                                        <p style="margin: 5px 0;"><strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}</p>
+                                    </div>
+                                `
+                            });
+                        }
+                    }
+                });
+                    
+            } catch (error) {
+                showError('Init failed: ' + error.message);
+            }
+        };
+        
+        // Listen for station updates from parent
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'UPDATE_STATIONS') {
+                stationsData = event.data.stations;
+                console.log('Received updated station data:', stationsData.length, 'stations');
+            }
+        });
+    </script>
+</body>
+</html>
