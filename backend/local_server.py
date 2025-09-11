@@ -502,17 +502,21 @@ async def get_live_data_station(station: str):
 
 @app.get("/predictions")
 async def get_predictions(
-    station: Optional[str] = Query(None, description="Station name (required)"),
+    station: Optional[str] = Query(None, description="Station name (legacy)"),
+    stations: Optional[str] = Query(None, description="Station names (comma-separated)"),
     model: str = Query("all", description="Model type (arima|prophet|kalman|ensemble|all)"),
     steps: int = Query(240, description="Number of hours to forecast")
 ):
-    """Get predictions for station"""
-    if not station:
+    """Get predictions for station(s)"""
+    # Support both 'station' and 'stations' parameters
+    station_param = stations or station
+    
+    if not station_param:
         raise HTTPException(status_code=400, detail="Station parameter is required")
     
     if not LAMBDA_HANDLERS_AVAILABLE:
         return {
-            "message": f"Demo predictions for {station} - Lambda handlers not available",
+            "message": f"Demo predictions for {station_param} - Lambda handlers not available",
             "arima": None,
             "prophet": None,
             "kalman": None,
@@ -522,7 +526,7 @@ async def get_predictions(
     try:
         event = {
             "queryStringParameters": {
-                "station": station,
+                "stations": station_param,
                 "model": model,
                 "steps": str(steps)
             }

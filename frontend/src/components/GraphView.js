@@ -97,125 +97,137 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
             }
           }
 
-          // Fetch predictions
+          // Fetch predictions for multiple stations
           if (filters.predictionModels && filters.predictionModels.length > 0) {
             try {
               // Build model parameter string
-              const modelParam = filters.predictionModels.includes('kalman') ? 'kalman' :
-                                filters.predictionModels.includes('ensemble') ? 'ensemble' :
-                                filters.predictionModels.join(',');
+              const modelParam = filters.predictionModels.join(',');
+              
+              // Support multiple stations - use current station or multiple if available
+              const stationParam = filters.station;
               
               const predResponse = await fetch(
-                `${apiBaseUrl}/predictions?station=${filters.station}&model=${modelParam}`
+                `${apiBaseUrl}/predictions?stations=${stationParam}&model=${modelParam}`
               );
               
               if (predResponse.ok) {
                 const predData = await predResponse.json();
                 
-                // Kalman Filter predictions with confidence intervals
-                if (predData.kalman && predData.kalman.length > 0) {
-                  const kalmanData = predData.kalman;
+                // Handle multi-station prediction response
+                const stationColors = ['#00ff88', '#ffaa00', '#ff6600', '#00aaff', '#ff00aa'];
+                let colorIndex = 0;
+                
+                Object.entries(predData).forEach(([stationKey, stationPredictions]) => {
+                  if (stationKey === 'global_metadata') return;
                   
-                  // Check if it's a nowcast (first point)
-                  const nowcast = kalmanData.find(p => p.type === 'nowcast');
-                  if (nowcast) {
-                    traces.push({
-                      x: [new Date(nowcast.ds)],
-                      y: [nowcast.yhat],
-                      type: 'scatter',
-                      mode: 'markers',
-                      name: 'Nowcast (Filtered State)',
-                      marker: { 
-                        color: '#00ff00', 
-                        symbol: 'star', 
-                        size: 12,
-                        line: { color: 'white', width: 2 }
-                      },
-                      hovertemplate: '<b>Current Nowcast</b><br>%{x}<br>Level: %{y:.3f}m<br>Uncertainty: ±' + 
-                                    (nowcast.uncertainty ? nowcast.uncertainty.toFixed(3) : '0.000') + 'm<extra></extra>'
-                    });
-                  }
+                  const baseColor = stationColors[colorIndex % stationColors.length];
+                  colorIndex++;
                   
-                  // Forecast line
-                  const forecastData = kalmanData.filter(p => p.type !== 'nowcast');
-                  traces.push({
-                    x: forecastData.map(item => new Date(item.ds)),
-                    y: forecastData.map(item => item.yhat),
-                    type: 'scattergl',
-                    mode: 'lines',
-                    name: 'Kalman Filter Forecast',
-                    line: { color: '#00ff88', width: 2, dash: 'solid' },
-                    hovertemplate: '<b>Kalman Forecast</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>'
-                  });
-                  
-                  // Confidence intervals (if available)
-                  if (forecastData[0]?.yhat_lower !== undefined) {
-                    // Upper confidence band
-                    traces.push({
-                      x: forecastData.map(item => new Date(item.ds)),
-                      y: forecastData.map(item => item.yhat_upper),
-                      type: 'scattergl',
-                      mode: 'lines',
-                      name: '95% CI Upper',
-                      line: { color: 'rgba(0, 255, 136, 0.2)', width: 0 },
-                      showlegend: false,
-                      hoverinfo: 'skip',
-                      fill: 'tonexty',
-                      fillcolor: 'rgba(0, 255, 136, 0.1)'
-                    });
+                  // Kalman Filter predictions
+                  if (stationPredictions.kalman && stationPredictions.kalman.length > 0) {
+                    const kalmanData = stationPredictions.kalman;
                     
-                    // Lower confidence band
+                    // Check for nowcast
+                    const nowcast = kalmanData.find(p => p.type === 'nowcast');
+                    if (nowcast) {
+                      traces.push({
+                        x: [new Date(nowcast.ds)],
+                        y: [nowcast.yhat],
+                        type: 'scatter',
+                        mode: 'markers',
+                        name: `${stationKey} - Nowcast`,
+                        marker: { 
+                          color: baseColor, 
+                          symbol: 'star', 
+                          size: 12,
+                          line: { color: 'white', width: 2 }
+                        },
+                        hovertemplate: `<b>${stationKey} Nowcast</b><br>%{x}<br>Level: %{y:.3f}m<br>Uncertainty: ±` + 
+                                      (nowcast.uncertainty ? nowcast.uncertainty.toFixed(3) : '0.000') + 'm<extra></extra>'
+                      });
+                    }
+                    
+                    // Forecast line
+                    const forecastData = kalmanData.filter(p => p.type !== 'nowcast');
+                    if (forecastData.length > 0) {
+                      traces.push({
+                        x: forecastData.map(item => new Date(item.ds)),
+                        y: forecastData.map(item => item.yhat),
+                        type: 'scattergl',
+                        mode: 'lines',
+                        name: `${stationKey} - Kalman Forecast`,
+                        line: { color: baseColor, width: 2 },
+                        hovertemplate: `<b>${stationKey} Kalman</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
+                      });
+                      
+                      // Confidence intervals (only for first station to avoid clutter)
+                      if (colorIndex === 1 && forecastData[0]?.yhat_lower !== undefined) {
+                        traces.push({
+                          x: forecastData.map(item => new Date(item.ds)),
+                          y: forecastData.map(item => item.yhat_upper),
+                          type: 'scattergl',
+                          mode: 'lines',
+                          name: '95% CI Upper',
+                          line: { color: 'rgba(0, 255, 136, 0.2)', width: 0 },
+                          showlegend: false,
+                          hoverinfo: 'skip',
+                          fill: 'tonexty',
+                          fillcolor: 'rgba(0, 255, 136, 0.1)'
+                        });
+                        
+                        traces.push({
+                          x: forecastData.map(item => new Date(item.ds)),
+                          y: forecastData.map(item => item.yhat_lower),
+                          type: 'scattergl',
+                          mode: 'lines',
+                          name: '95% CI Lower',
+                          line: { color: 'rgba(0, 255, 136, 0.2)', width: 1, dash: 'dot' },
+                          showlegend: false,
+                          hovertemplate: `<b>${stationKey} 95% CI</b><br>%{x}<br>Lower: %{y:.3f}m<extra></extra>`
+                        });
+                      }
+                    }
+                  }
+                  
+                  // Ensemble predictions
+                  if (stationPredictions.ensemble && stationPredictions.ensemble.length > 0) {
                     traces.push({
-                      x: forecastData.map(item => new Date(item.ds)),
-                      y: forecastData.map(item => item.yhat_lower),
+                      x: stationPredictions.ensemble.map(item => new Date(item.ds)),
+                      y: stationPredictions.ensemble.map(item => item.yhat),
                       type: 'scattergl',
                       mode: 'lines',
-                      name: '95% CI Lower',
-                      line: { color: 'rgba(0, 255, 136, 0.2)', width: 1, dash: 'dot' },
-                      showlegend: false,
-                      hovertemplate: '<b>95% Confidence Interval</b><br>%{x}<br>Lower: %{y:.3f}m<extra></extra>'
+                      name: `${stationKey} - Ensemble`,
+                      line: { color: baseColor, width: 2, dash: 'dash' },
+                      hovertemplate: `<b>${stationKey} Ensemble</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
                     });
                   }
-                }
-                
-                // Ensemble predictions
-                if (predData.ensemble && predData.ensemble.length > 0) {
-                  traces.push({
-                    x: predData.ensemble.map(item => new Date(item.ds)),
-                    y: predData.ensemble.map(item => item.yhat),
-                    type: 'scattergl',
-                    mode: 'lines',
-                    name: 'Ensemble Forecast',
-                    line: { color: '#ffaa00', width: 2, dash: 'dash' },
-                    hovertemplate: '<b>Ensemble</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>'
-                  });
-                }
-                
-                // ARIMA predictions (fallback)
-                if (predData.arima && predData.arima.length > 0) {
-                  traces.push({
-                    x: predData.arima.map(item => new Date(item.ds)),
-                    y: predData.arima.map(item => item.yhat),
-                    type: 'scattergl',
-                    mode: 'lines',
-                    name: 'ARIMA Forecast',
-                    line: { color: '#00ffff', width: 1.5, dash: 'dot' },
-                    hovertemplate: '<b>ARIMA</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>'
-                  });
-                }
-                
-                // Prophet predictions (fallback)
-                if (predData.prophet && predData.prophet.length > 0) {
-                  traces.push({
-                    x: predData.prophet.map(item => new Date(item.ds)),
-                    y: predData.prophet.map(item => item.yhat),
-                    type: 'scattergl',
-                    mode: 'lines',
-                    name: 'Prophet Forecast',
-                    line: { color: '#ff8800', width: 1.5, dash: 'dashdot' },
-                    hovertemplate: '<b>Prophet</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>'
-                  });
-                }
+                  
+                  // ARIMA predictions
+                  if (stationPredictions.arima && stationPredictions.arima.length > 0) {
+                    traces.push({
+                      x: stationPredictions.arima.map(item => new Date(item.ds)),
+                      y: stationPredictions.arima.map(item => item.yhat),
+                      type: 'scattergl',
+                      mode: 'lines',
+                      name: `${stationKey} - ARIMA`,
+                      line: { color: baseColor, width: 1.5, dash: 'dot' },
+                      hovertemplate: `<b>${stationKey} ARIMA</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
+                    });
+                  }
+                  
+                  // Prophet predictions
+                  if (stationPredictions.prophet && stationPredictions.prophet.length > 0) {
+                    traces.push({
+                      x: stationPredictions.prophet.map(item => new Date(item.ds)),
+                      y: stationPredictions.prophet.map(item => item.yhat),
+                      type: 'scattergl',
+                      mode: 'lines',
+                      name: `${stationKey} - Prophet`,
+                      line: { color: baseColor, width: 1.5, dash: 'dashdot' },
+                      hovertemplate: `<b>${stationKey} Prophet</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
+                    });
+                  }
+                });
               }
             } catch (predError) {
               console.error('Error fetching predictions:', predError);

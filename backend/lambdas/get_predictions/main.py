@@ -332,15 +332,20 @@ def ensemble_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
 
 
 def handler(event, context):
-    """Lambda handler for predictions"""
+    """Lambda handler for predictions - supports multiple stations"""
     try:
         # Parse parameters
         params = event.get('queryStringParameters') or {}
-        station = params.get('station')
+        logger.info(f"Received params: {params}")
+        
+        stations_param = params.get('stations') or params.get('station')
         models = params.get('model', 'kalman').split(',')
         steps = int(params.get('steps', 240))
         
-        if not station:
+        logger.info(f"stations_param: {stations_param}")
+        
+        if not stations_param:
+            logger.error("No station parameter found")
             return {
                 "statusCode": 400,
                 "headers": {
@@ -350,45 +355,65 @@ def handler(event, context):
                 "body": json.dumps({"error": "Station parameter is required"})
             }
         
-        logger.info(f"Generating predictions for station={station}, models={models}, steps={steps}")
+        # Support multiple stations separated by comma
+        # Handle URL encoding
+        import urllib.parse
+        stations_param = urllib.parse.unquote(stations_param)
+        stations = [s.strip() for s in stations_param.split(',')]
+        logger.info(f"Generating predictions for stations={stations}, models={models}, steps={steps}")
         
         results = {}
         
-        # Primary: Use Kalman filter if requested
-        if 'kalman' in models or 'all' in models:
-            kalman_result = kalman_predict(station, steps)
-            if kalman_result:
-                results['kalman'] = kalman_result
-            else:
-                results['kalman'] = []
+        # Process each station
+        for station in stations:
+            station_results = {}
+            
+            # Primary: Use Kalman filter if requested
+            if 'kalman' in models or 'all' in models:
+                kalman_result = kalman_predict(station, steps)
+                if kalman_result:
+                    station_results['kalman'] = kalman_result
+                else:
+                    station_results['kalman'] = []
+            
+            # Ensemble prediction
+            if 'ensemble' in models:
+                ensemble_result = ensemble_predict(station, steps)
+                if ensemble_result:
+                    station_results['ensemble'] = ensemble_result
+            
+            # Fallback models
+            if 'arima' in models or 'all' in models:
+                arima_result = arima_predict(station, steps)
+                if arima_result:
+                    station_results['arima'] = arima_result
+                else:
+                    station_results['arima'] = []
+            
+            if 'prophet' in models or 'all' in models:
+                prophet_result = prophet_predict(station, steps)
+                if prophet_result:
+                    station_results['prophet'] = prophet_result
+                else:
+                    station_results['prophet'] = []
+            
+            # Add station metadata
+            station_results['metadata'] = {
+                'station': station,
+                'generated_at': datetime.now().isoformat(),
+                'forecast_hours': steps,
+                'models_used': [k for k in station_results.keys() if k != 'metadata']
+            }
+            
+            results[station] = station_results
         
-        # Ensemble prediction
-        if 'ensemble' in models:
-            ensemble_result = ensemble_predict(station, steps)
-            if ensemble_result:
-                results['ensemble'] = ensemble_result
-        
-        # Fallback models
-        if 'arima' in models or 'all' in models:
-            arima_result = arima_predict(station, steps)
-            if arima_result:
-                results['arima'] = arima_result
-            else:
-                results['arima'] = []
-        
-        if 'prophet' in models or 'all' in models:
-            prophet_result = prophet_predict(station, steps)
-            if prophet_result:
-                results['prophet'] = prophet_result
-            else:
-                results['prophet'] = []
-        
-        # Add metadata
-        results['metadata'] = {
-            'station': station,
+        # Add global metadata
+        results['global_metadata'] = {
+            'stations': stations,
+            'total_stations': len(stations),
             'generated_at': datetime.now().isoformat(),
             'forecast_hours': steps,
-            'models_used': list(results.keys())
+            'requested_models': models
         }
         
         return {

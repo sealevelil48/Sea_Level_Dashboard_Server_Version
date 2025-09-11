@@ -16,11 +16,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [graphData, setGraphData] = useState([]);
   const [tableData, setTableData] = useState([]);
-  const [predictions, setPredictions] = useState({ 
-    arima: null, 
-    kalman: null,
-    ensemble: null 
-  });
+  const [predictions, setPredictions] = useState({});
   const [selectedStations, setSelectedStations] = useState(['All Stations']);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(50);
@@ -139,8 +135,8 @@ function App() {
     });
   }, [selectedStations]);
 
-  // Enhanced fetch predictions for Kalman support
-  const fetchPredictions = useCallback(async (station) => {
+  // Enhanced fetch predictions for multiple stations
+  const fetchPredictions = useCallback(async (stations) => {
     if (filters.predictionModels.length === 0) {
       setPredictions({ arima: null, kalman: null, ensemble: null });
       return;
@@ -150,8 +146,11 @@ function App() {
       // Determine which model to request
       let modelParam = filters.predictionModels.join(',');
       
+      // Support multiple stations
+      const stationParam = Array.isArray(stations) ? stations.join(',') : stations;
+      
       const params = new URLSearchParams({
-        station: station,
+        stations: stationParam,
         model: modelParam,
         steps: filters.forecastHours.toString()
       });
@@ -163,7 +162,7 @@ function App() {
       }
     } catch (error) {
       console.error('Error fetching predictions:', error);
-      setPredictions({ arima: null, kalman: null, ensemble: null });
+      setPredictions({});
     }
   }, [filters.predictionModels, filters.forecastHours]);
 
@@ -277,12 +276,16 @@ function App() {
     }
   }, [fetchData, stations.length]);
 
-  // SEPARATE EFFECT: Handle predictions to prevent infinite loops
+  // SEPARATE EFFECT: Handle predictions for multiple stations
   useEffect(() => {
-    if (filters.predictionModels.length > 0 && selectedStations.length === 1 && !selectedStations.includes('All Stations') && graphData.length > 0) {
-      fetchPredictions(selectedStations[0]);
+    if (filters.predictionModels.length > 0 && selectedStations.length > 0 && !selectedStations.includes('All Stations') && graphData.length > 0) {
+      // Support up to 3 stations for predictions
+      const stationsForPrediction = selectedStations.filter(s => s !== 'All Stations').slice(0, 3);
+      if (stationsForPrediction.length > 0) {
+        fetchPredictions(stationsForPrediction);
+      }
     } else {
-      setPredictions({ arima: null, kalman: null, ensemble: null });
+      setPredictions({});
     }
   }, [filters.predictionModels, selectedStations, fetchPredictions, graphData.length]);
 
@@ -534,118 +537,111 @@ function App() {
         }
       }
 
-      // ADD KALMAN FILTER PREDICTIONS
-      if (predictions.kalman && predictions.kalman.length > 0 && selectedStations.length === 1) {
-        const kalmanData = predictions.kalman;
+      // ADD PREDICTIONS FOR MULTIPLE STATIONS
+      if (predictions && Object.keys(predictions).length > 0) {
+        const stationColors = ['#00ff88', '#ffaa00', '#ff6600', '#00aaff', '#ff00aa'];
+        let colorIndex = 0;
         
-        // Check for nowcast
-        const nowcast = kalmanData.find(p => p.type === 'nowcast');
-        if (nowcast) {
-          traces.push({
-            x: [new Date(nowcast.ds)],
-            y: [nowcast.yhat],
-            type: 'scatter',
-            mode: 'markers',
-            name: 'Nowcast (Filtered State)',
-            marker: { 
-              color: '#00ff00', 
-              symbol: 'star', 
-              size: 12,
-              line: { color: 'white', width: 2 }
-            },
-            hovertemplate: '<b>Current Nowcast</b><br>%{x}<br>Level: %{y:.3f}m<br>Uncertainty: ±' + 
-                          (nowcast.uncertainty ? nowcast.uncertainty.toFixed(3) : '0.000') + 'm<extra></extra>'
-          });
-        }
-        
-        // Forecast line
-        const forecastData = kalmanData.filter(p => p.type !== 'nowcast');
-        if (forecastData.length > 0) {
-          traces.push({
-            x: forecastData.map(item => new Date(item.ds)),
-            y: forecastData.map(item => item.yhat),
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Kalman Filter Forecast',
-            line: { color: '#00ff88', width: 2 },
-            hovertemplate: '<b>Kalman Forecast</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>'
-          });
+        // Process each station's predictions
+        Object.entries(predictions).forEach(([stationKey, stationPredictions]) => {
+          if (stationKey === 'global_metadata' || !stationPredictions) return;
           
-          // Confidence intervals
-          if (forecastData[0]?.yhat_lower !== undefined) {
-            traces.push({
-              x: forecastData.map(item => new Date(item.ds)),
-              y: forecastData.map(item => item.yhat_upper),
-              type: 'scatter',
-              mode: 'lines',
-              name: '95% CI Upper',
-              line: { color: 'rgba(0, 255, 136, 0.2)', width: 0 },
-              showlegend: false,
-              hoverinfo: 'skip',
-              fill: 'tonexty',
-              fillcolor: 'rgba(0, 255, 136, 0.1)'
-            });
+          const baseColor = stationColors[colorIndex % stationColors.length];
+          colorIndex++;
+          
+          // KALMAN FILTER PREDICTIONS
+          if (stationPredictions?.kalman && stationPredictions.kalman.length > 0) {
+            const kalmanData = stationPredictions.kalman;
             
+            // Check for nowcast
+            const nowcast = kalmanData.find(p => p.type === 'nowcast');
+            if (nowcast) {
+              traces.push({
+                x: [new Date(nowcast.ds)],
+                y: [nowcast.yhat],
+                type: 'scatter',
+                mode: 'markers',
+                name: `${stationKey} - Nowcast`,
+                marker: { 
+                  color: baseColor, 
+                  symbol: 'star', 
+                  size: 12,
+                  line: { color: 'white', width: 2 }
+                },
+                hovertemplate: `<b>${stationKey} Nowcast</b><br>%{x}<br>Level: %{y:.3f}m<br>Uncertainty: ±` + 
+                              (nowcast.uncertainty ? nowcast.uncertainty.toFixed(3) : '0.000') + 'm<extra></extra>'
+              });
+            }
+            
+            // Forecast line
+            const forecastData = kalmanData.filter(p => p.type !== 'nowcast');
+            if (forecastData.length > 0) {
+              traces.push({
+                x: forecastData.map(item => new Date(item.ds)),
+                y: forecastData.map(item => item.yhat),
+                type: 'scatter',
+                mode: 'lines',
+                name: `${stationKey} - Kalman Forecast`,
+                line: { color: baseColor, width: 2 },
+                hovertemplate: `<b>${stationKey} Kalman</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
+              });
+              
+              // Confidence intervals (only for first station to avoid clutter)
+              if (colorIndex === 1 && forecastData[0]?.yhat_lower !== undefined) {
+                traces.push({
+                  x: forecastData.map(item => new Date(item.ds)),
+                  y: forecastData.map(item => item.yhat_upper),
+                  type: 'scatter',
+                  mode: 'lines',
+                  name: '95% CI Upper',
+                  line: { color: `rgba(${parseInt(baseColor.slice(1,3), 16)}, ${parseInt(baseColor.slice(3,5), 16)}, ${parseInt(baseColor.slice(5,7), 16)}, 0.2)`, width: 0 },
+                  showlegend: false,
+                  hoverinfo: 'skip',
+                  fill: 'tonexty',
+                  fillcolor: `rgba(${parseInt(baseColor.slice(1,3), 16)}, ${parseInt(baseColor.slice(3,5), 16)}, ${parseInt(baseColor.slice(5,7), 16)}, 0.1)`
+                });
+                
+                traces.push({
+                  x: forecastData.map(item => new Date(item.ds)),
+                  y: forecastData.map(item => item.yhat_lower),
+                  type: 'scatter',
+                  mode: 'lines',
+                  name: '95% CI Lower',
+                  line: { color: `rgba(${parseInt(baseColor.slice(1,3), 16)}, ${parseInt(baseColor.slice(3,5), 16)}, ${parseInt(baseColor.slice(5,7), 16)}, 0.2)`, width: 1, dash: 'dot' },
+                  showlegend: false,
+                  hovertemplate: `<b>${stationKey} 95% CI</b><br>%{x}<br>Lower: %{y:.3f}m<extra></extra>`
+                });
+              }
+            }
+          }
+          
+          // ENSEMBLE PREDICTIONS
+          if (stationPredictions?.ensemble && stationPredictions.ensemble.length > 0) {
             traces.push({
-              x: forecastData.map(item => new Date(item.ds)),
-              y: forecastData.map(item => item.yhat_lower),
+              x: stationPredictions.ensemble.map(item => new Date(item.ds)),
+              y: stationPredictions.ensemble.map(item => item.yhat),
               type: 'scatter',
               mode: 'lines',
-              name: '95% CI Lower',
-              line: { color: 'rgba(0, 255, 136, 0.2)', width: 1, dash: 'dot' },
-              showlegend: false,
-              hovertemplate: '<b>95% Confidence Interval</b><br>%{x}<br>Lower: %{y:.3f}m<extra></extra>'
+              name: `${stationKey} - Ensemble`,
+              line: { color: baseColor, width: 2, dash: 'dash' },
+              hovertemplate: `<b>${stationKey} Ensemble</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
             });
           }
-        }
-      }
-
-      // ADD ENSEMBLE PREDICTIONS
-      if (predictions.ensemble && predictions.ensemble.length > 0 && selectedStations.length === 1) {
-        traces.push({
-          x: predictions.ensemble.map(item => new Date(item.ds)),
-          y: predictions.ensemble.map(item => item.yhat),
-          type: 'scatter',
-          mode: 'lines',
-          name: 'Ensemble Forecast',
-          line: { color: '#ffaa00', width: 2, dash: 'dash' },
-          hovertemplate: '<b>Ensemble</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>'
+          
+          // ARIMA PREDICTIONS
+          if (stationPredictions?.arima && Array.isArray(stationPredictions.arima) && stationPredictions.arima.length > 0) {
+            if (typeof stationPredictions.arima[0] === 'object' && stationPredictions.arima[0].ds) {
+              traces.push({
+                x: stationPredictions.arima.map(item => new Date(item.ds)),
+                y: stationPredictions.arima.map(item => item.yhat),
+                type: 'scatter',
+                mode: 'lines',
+                name: `${stationKey} - ARIMA`,
+                line: { color: baseColor, dash: 'dot', width: 2 }
+              });
+            }
+          }
         });
-      }
-
-      // Add ARIMA predictions - FIXED to handle both array and object formats
-      if (predictions.arima && selectedStations.length === 1) {
-        // Check if ARIMA is array of objects or simple array
-        if (Array.isArray(predictions.arima) && predictions.arima.length > 0) {
-          if (typeof predictions.arima[0] === 'object' && predictions.arima[0].ds) {
-            // Object format with ds and yhat
-            traces.push({
-              x: predictions.arima.map(item => new Date(item.ds)),
-              y: predictions.arima.map(item => item.yhat),
-              type: 'scatter',
-              mode: 'lines',
-              name: 'ARIMA Forecast',
-              line: { color: 'lime', dash: 'dot', width: 2 }
-            });
-          } else if (typeof predictions.arima[0] === 'number') {
-            // Simple array of numbers
-            const lastDate = new Date(graphData[graphData.length - 1].Tab_DateTime);
-            const predictionDates = Array.from({ length: predictions.arima.length }, (_, i) => {
-              const date = new Date(lastDate);
-              date.setHours(date.getHours() + i + 1);
-              return date.toISOString();
-            });
-            
-            traces.push({
-              x: predictionDates,
-              y: predictions.arima,
-              type: 'scatter',
-              mode: 'lines',
-              name: 'ARIMA Forecast',
-              line: { color: 'lime', dash: 'dot', width: 2 }
-            });
-          }
-        }
       }
     }
 
@@ -907,9 +903,9 @@ function App() {
                       onChange={() => handleModelChange('arima')}
                     />
                   </div>
-                  {selectedStations.length > 1 && filters.predictionModels.length > 0 && (
+                  {selectedStations.length > 3 && filters.predictionModels.length > 0 && (
                     <small className="text-warning">
-                      Predictions require single station selection
+                      Predictions limited to 3 stations maximum
                     </small>
                   )}
                 </Form.Group>
@@ -1018,7 +1014,9 @@ function App() {
                     {filters.predictionModels && filters.predictionModels.length > 0 && (
                       <div className="mt-2 text-center">
                         <small style={{ color: '#00ff00' }}>
-                          Active Models: {filters.predictionModels.join(', ')}
+                          Active Models: {filters.predictionModels.join(', ')} | 
+                          Stations: {selectedStations.filter(s => s !== 'All Stations').length > 0 ? 
+                            selectedStations.filter(s => s !== 'All Stations').slice(0, 3).join(', ') : 'None'}
                         </small>
                       </div>
                     )}

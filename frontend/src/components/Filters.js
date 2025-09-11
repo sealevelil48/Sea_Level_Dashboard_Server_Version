@@ -187,6 +187,7 @@ const Filters = ({ filters, setFilters, stations }) => {
                   <span style={{ color: 'white' }}>
                     <strong>Kalman Filter</strong>
                     <Badge bg="primary" className="ms-1">Recommended</Badge>
+                    <Badge bg="success" className="ms-1">Multi-Station</Badge>
                     <small style={{ color: '#8899aa', display: 'block' }}>
                       State-space model with uncertainty bands
                     </small>
@@ -202,6 +203,7 @@ const Filters = ({ filters, setFilters, stations }) => {
                 label={
                   <span style={{ color: 'white' }}>
                     <strong>Ensemble</strong>
+                    <Badge bg="success" className="ms-1">Multi-Station</Badge>
                     <small style={{ color: '#8899aa', display: 'block' }}>
                       Combined multi-model forecast
                     </small>
@@ -217,6 +219,7 @@ const Filters = ({ filters, setFilters, stations }) => {
                 label={
                   <span style={{ color: 'white' }}>
                     <strong>ARIMA</strong>
+                    <Badge bg="success" className="ms-1">Multi-Station</Badge>
                     <small style={{ color: '#8899aa', display: 'block' }}>
                       Time series model
                     </small>
@@ -232,6 +235,7 @@ const Filters = ({ filters, setFilters, stations }) => {
                 label={
                   <span style={{ color: 'white' }}>
                     <strong>Prophet</strong>
+                    <Badge bg="success" className="ms-1">Multi-Station</Badge>
                     <small style={{ color: '#8899aa', display: 'block' }}>
                       Facebook's forecasting
                     </small>
