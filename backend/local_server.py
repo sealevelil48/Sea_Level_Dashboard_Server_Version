@@ -504,7 +504,7 @@ async def get_live_data_station(station: str):
 async def get_predictions(
     station: Optional[str] = Query(None, description="Station name (legacy)"),
     stations: Optional[str] = Query(None, description="Station names (comma-separated)"),
-    model: str = Query("all", description="Model type (arima|prophet|kalman|ensemble|all)"),
+    model: str = Query("all", description="Model type (arima|kalman|ensemble|all)"),
     steps: int = Query(240, description="Number of hours to forecast")
 ):
     """Get predictions for station(s)"""
@@ -518,7 +518,6 @@ async def get_predictions(
         return {
             "message": f"Demo predictions for {station_param} - Lambda handlers not available",
             "arima": None,
-            "prophet": None,
             "kalman": None,
             "ensemble": None
         }
@@ -535,7 +534,7 @@ async def get_predictions(
         return lambda_response_to_fastapi(response)
     except Exception as e:
         logger.error(f"Error in get_predictions: {e}")
-        return {"error": str(e), "arima": None, "prophet": None, "kalman": None, "ensemble": None}
+        return {"error": str(e), "arima": None, "kalman": None, "ensemble": None}
 
 @app.get("/stations/map")
 async def get_station_map(end_date: str = None):

@@ -1,10 +1,15 @@
-// frontend/src/App.js - Modified version without Prophet, reordered controls
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Container, Row, Col, Card, Form, Tabs, Tab, Badge, Button } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
+import { Container, Row, Col, Card, Form, Tabs, Tab, Badge, Button, Spinner } from 'react-bootstrap';
 import Plot from 'react-plotly.js';
-import OSMMap from './components/OSMMap';
+import * as XLSX from 'xlsx';
+import ErrorBoundary from './components/ErrorBoundary';
+import { useFavorites } from './hooks/useFavorites';
+import apiService from './services/apiService';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
+
+// Lazy load heavy components
+const OSMMap = lazy(() => import('./components/OSMMap'));
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://sea-level-dash-local:8001';
 
@@ -12,6 +17,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTab, setActiveTab] = useState('graph');
   const [mapTab, setMapTab] = useState('osm');
+  const [tableTab, setTableTab] = useState('historical');
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [graphData, setGraphData] = useState([]);
@@ -19,8 +25,12 @@ function App() {
   const [predictions, setPredictions] = useState({});
   const [selectedStations, setSelectedStations] = useState(['All Stations']);
   const [currentPage, setCurrentPage] = useState(1);
+  const [forecastPage, setForecastPage] = useState(1);
   const [itemsPerPage] = useState(50);
   const plotRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  
+  const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
   
   // Initialize stats
   const [stats, setStats] = useState({
@@ -56,11 +66,8 @@ function App() {
   const fetchStations = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/stations`);
-      if (response.ok) {
-        const data = await response.json();
-        setStations(data.stations || []);
-      }
+      const data = await apiService.getStations();
+      setStations(data.stations || []);
     } catch (error) {
       console.error('Error fetching stations:', error);
     } finally {
@@ -166,10 +173,16 @@ function App() {
     }
   }, [filters.predictionModels, filters.forecastHours]);
 
-  // Fetch data - existing implementation
+  // Stabilize fetchData with proper dependencies
   const fetchData = useCallback(async () => {
-    if (stations.length === 0 || selectedStations.length === 0) return;
+    if (loading || stations.length === 0 || selectedStations.length === 0) return;
     
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
     setLoading(true);
     try {
       let allData = [];
@@ -178,21 +191,18 @@ function App() {
         const stationList = stations.filter(s => s !== 'All Stations');
         
         for (const station of stationList) {
-          const params = new URLSearchParams({
+          const params = {
             station: station,
             start_date: filters.startDate,
             end_date: filters.endDate,
             data_source: filters.dataType,
             show_anomalies: filters.showAnomalies.toString()
-          });
+          };
 
           try {
-            const response = await fetch(`${API_BASE_URL}/data?${params}`);
-            if (response.ok) {
-              const data = await response.json();
-              if (Array.isArray(data)) {
-                allData = allData.concat(data);
-              }
+            const data = await apiService.getData(params);
+            if (Array.isArray(data)) {
+              allData = allData.concat(data);
             }
           } catch (err) {
             console.error(`Error fetching data for ${station}:`, err);
@@ -200,21 +210,18 @@ function App() {
         }
       } else {
         for (const station of selectedStations.filter(s => s !== 'All Stations').slice(0, 3)) {
-          const params = new URLSearchParams({
+          const params = {
             station: station,
             start_date: filters.startDate,
             end_date: filters.endDate,
             data_source: filters.dataType,
             show_anomalies: filters.showAnomalies.toString()
-          });
+          };
 
           try {
-            const response = await fetch(`${API_BASE_URL}/data?${params}`);
-            if (response.ok) {
-              const data = await response.json();
-              if (Array.isArray(data)) {
-                allData = allData.concat(data);
-              }
+            const data = await apiService.getData(params);
+            if (Array.isArray(data)) {
+              allData = allData.concat(data);
             }
           } catch (err) {
             console.error(`Error fetching data for ${station}:`, err);
@@ -225,33 +232,44 @@ function App() {
       if (Array.isArray(allData) && allData.length > 0) {
         setGraphData(allData);
         
-        // For table view, add calculated values
-        const enrichedData = allData.map((row, index) => {
+        // Optimize data for large datasets
+        const optimizedData = allData.length > 5000 ? allData.filter((_, i) => i % 10 === 0) : allData;
+        
+        // Pre-calculate trendline and analysis once
+        let trendlineValues = null;
+        let analysisValues = null;
+        
+        if (filters.trendline !== 'none' && optimizedData.length > 1) {
+          const trendlineData = calculateTrendline(optimizedData, filters.trendline);
+          trendlineValues = trendlineData?.y || [];
+        }
+        
+        if (filters.analysisType !== 'none' && optimizedData.length > 1) {
+          const analysisData = calculateAnalysis(optimizedData, filters.analysisType);
+          if (Array.isArray(analysisData)) {
+            analysisValues = analysisData[0]?.y || [];
+          } else {
+            analysisValues = analysisData?.y || [];
+          }
+        }
+        
+        // Add calculated values to table data
+        const enrichedData = optimizedData.map((row, index) => {
           const enriched = { ...row };
           
-          // Add trendline value if selected
-          if (filters.trendline !== 'none' && allData.length > 1) {
-            const trendlineData = calculateTrendline(allData, filters.trendline);
-            enriched.trendlineValue = trendlineData?.y?.[index] || 'N/A';
+          if (trendlineValues) {
+            enriched.trendlineValue = trendlineValues[index]?.toFixed(3) || 'N/A';
           }
           
-          // Add analysis value if selected
-          if (filters.analysisType !== 'none' && allData.length > 1) {
-            const analysisData = calculateAnalysis(allData, filters.analysisType);
-            if (Array.isArray(analysisData)) {
-              enriched.analysisValue = analysisData[0]?.y?.[index] || 'N/A';
-            } else {
-              enriched.analysisValue = analysisData?.y?.[index] || 'N/A';
-            }
+          if (analysisValues) {
+            enriched.analysisValue = analysisValues[index]?.toFixed(3) || 'N/A';
           }
           
           return enriched;
         });
         
-        const sortedData = enrichedData.sort((a, b) => new Date(a.Tab_DateTime || a.Date) - new Date(b.Tab_DateTime || b.Date));
-        setTableData(sortedData);
+        setTableData(enrichedData.sort((a, b) => new Date(a.Tab_DateTime || a.Date) - new Date(b.Tab_DateTime || b.Date)));
         setCurrentPage(1);
-
         calculateStats(allData);
       } else {
         setGraphData([]);
@@ -259,35 +277,55 @@ function App() {
         setStats({ current_level: 0, '24h_change': 0, avg_temp: 0, anomalies: 0 });
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching data:', error);
+      }
     } finally {
       setLoading(false);
     }
-  }, [filters.startDate, filters.endDate, filters.dataType, filters.showAnomalies, filters.trendline, filters.analysisType, selectedStations, stations, calculateStats]);
+  }, [
+    // Remove predictions from dependencies
+    filters.startDate, 
+    filters.endDate, 
+    filters.dataType,
+    filters.showAnomalies,
+    filters.trendline,
+    filters.analysisType,
+    selectedStations,
+    stations.length // Use length instead of full array
+  ]);
 
-  // AUTO-UPDATE: Fetch data when filters or stations change with debouncing
+  // Cleanup on unmount
   useEffect(() => {
-    if (stations.length > 0) {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Debounced data fetching
+  useEffect(() => {
+    if (stations.length > 0 && selectedStations.length > 0) {
       const timeoutId = setTimeout(() => {
         fetchData();
-      }, 800); // Increased debounce time for better performance
+      }, 300);
       
       return () => clearTimeout(timeoutId);
     }
-  }, [fetchData, stations.length]);
+  }, [filters.startDate, filters.endDate, filters.dataType, filters.showAnomalies, selectedStations, stations.length]);
 
-  // SEPARATE EFFECT: Handle predictions for multiple stations
+  // Separate effect for predictions - support multiple stations
   useEffect(() => {
-    if (filters.predictionModels.length > 0 && selectedStations.length > 0 && !selectedStations.includes('All Stations') && graphData.length > 0) {
-      // Support up to 3 stations for predictions
-      const stationsForPrediction = selectedStations.filter(s => s !== 'All Stations').slice(0, 3);
-      if (stationsForPrediction.length > 0) {
-        fetchPredictions(stationsForPrediction);
+    if (filters.predictionModels.length > 0 && 
+        selectedStations.length > 0 && 
+        !selectedStations.includes('All Stations')) {
+      const stationsToPredict = selectedStations.filter(s => s !== 'All Stations').slice(0, 3);
+      if (stationsToPredict.length > 0) {
+        fetchPredictions(stationsToPredict);
       }
-    } else {
-      setPredictions({});
     }
-  }, [filters.predictionModels, selectedStations, fetchPredictions, graphData.length]);
+  }, [filters.predictionModels, selectedStations, fetchPredictions]);
 
   // Handle station selection (support multi-select up to 3)
   const handleStationChange = (value) => {
@@ -700,26 +738,43 @@ function App() {
       return;
     }
 
-    const headers = Object.keys(tableData[0]);
-    const csvContent = [
-      headers.join(','),
-      ...tableData.map(row => 
-        headers.map(header => {
-          const value = row[header];
-          return typeof value === 'string' && value.includes(',') 
-            ? `"${value}"` 
-            : value;
-        }).join(',')
-      )
-    ].join('\n');
+    const workbook = {
+      SheetNames: ['Historical Data'],
+      Sheets: {}
+    };
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sea_level_data_${selectedStations.join('_')}_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    // Historical data worksheet
+    workbook.Sheets['Historical Data'] = XLSX.utils.json_to_sheet(tableData);
+
+    // Forecast data worksheet
+    const predictionRows = [];
+    Object.entries(predictions).forEach(([stationKey, stationPredictions]) => {
+      if (stationKey === 'global_metadata' || !stationPredictions) return;
+      
+      ['kalman', 'ensemble', 'arima'].forEach(model => {
+        if (stationPredictions[model] && Array.isArray(stationPredictions[model])) {
+          stationPredictions[model].forEach((pred) => {
+            predictionRows.push({
+              Station: stationKey,
+              Model: model,
+              DateTime: pred.ds,
+              PredictedLevel: pred.yhat || pred,
+              Type: pred.type || 'forecast',
+              Uncertainty: pred.uncertainty || '',
+              UpperBound: pred.yhat_upper || '',
+              LowerBound: pred.yhat_lower || ''
+            });
+          });
+        }
+      });
+    });
+
+    if (predictionRows.length > 0) {
+      workbook.SheetNames.push('Forecast Data');
+      workbook.Sheets['Forecast Data'] = XLSX.utils.json_to_sheet(predictionRows);
+    }
+
+    XLSX.writeFile(workbook, `sea_level_data_${selectedStations.join('_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   // Map component
@@ -748,18 +803,19 @@ function App() {
   }, [mapTab, stations, selectedStations, graphData, filters.endDate]);
 
   return (
-    <div className="dash-container">
-      {/* Header */}
-      <div className="header">
-        <h1 className="navbar-brand">
-          <img src="/assets/Mapi_Logo2.png" alt="Mapi Logo" style={{height: '40px', marginRight: '10px'}} />
-          Sea Level Monitoring Dashboard
-        </h1>
-        <div id="current-time">{currentTime.toLocaleString()}</div>
-      </div>
+    <ErrorBoundary>
+      <div className="dash-container">
+        {/* Header */}
+        <div className="header">
+          <h1 className="navbar-brand">
+            <img src="/assets/Mapi_Logo2.png" alt="Mapi Logo" style={{height: '40px', marginRight: '10px'}} />
+            Sea Level Monitoring Dashboard
+          </h1>
+          <div id="current-time">{currentTime.toLocaleString()}</div>
+        </div>
 
-      {/* Main Content */}
-      <Container fluid className="p-3">
+        {/* Main Content */}
+        <Container fluid className="p-3">
         <Row>
           {/* Filters Column */}
           <Col md={3}>
@@ -785,16 +841,34 @@ function App() {
                 <Form.Group className="mb-3">
                   <Form.Label>Stations ({selectedStations.length}/3)</Form.Label>
                   {stations.map(station => (
-                    <Form.Check
-                      key={station}
-                      type="checkbox"
-                      label={station}
-                      checked={selectedStations.includes(station)}
-                      onChange={() => handleStationChange(station)}
-                      disabled={!selectedStations.includes(station) && selectedStations.length >= 3 && station !== 'All Stations'}
-                    />
+                    <div key={station} className="d-flex align-items-center">
+                      <Form.Check
+                        type="checkbox"
+                        label={station}
+                        checked={selectedStations.includes(station)}
+                        onChange={() => handleStationChange(station)}
+                        disabled={!selectedStations.includes(station) && selectedStations.length >= 3 && station !== 'All Stations'}
+                        className="flex-grow-1"
+                      />
+                      {station !== 'All Stations' && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="p-0 ms-2"
+                          onClick={() => isFavorite(station) ? removeFavorite(station) : addFavorite(station)}
+                          title={isFavorite(station) ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                          {isFavorite(station) ? '⭐' : '☆'}
+                        </Button>
+                      )}
+                    </div>
                   ))}
                   <small className="text-muted">Select up to 3 stations or "All Stations"</small>
+                  {favorites.length > 0 && (
+                    <div className="mt-2">
+                      <small className="text-info">Favorites: {favorites.join(', ')}</small>
+                    </div>
+                  )}
                 </Form.Group>
 
                 <Form.Group className="mb-3">
@@ -845,10 +919,9 @@ function App() {
                     value={filters.forecastHours}
                     onChange={(e) => handleFilterChange('forecastHours', parseInt(e.target.value))}
                   >
-                    <option value="24">1 day</option>
-                    <option value="72">3 days</option>
-                    <option value="168">1 week</option>
-                    <option value="240">10 days</option>
+                    <option value="24">24H</option>
+                    <option value="48">48H</option>
+                    <option value="72">72H</option>
                   </Form.Select>
                 </Form.Group>
 
@@ -1023,37 +1096,32 @@ function App() {
                   </Tab>
                   
                   <Tab eventKey="table" title="Table View">
-                    <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
-                      {tableData.length > 0 ? (
-                        <>
-                          <table className="table table-dark table-striped">
-                            <thead>
-                              <tr>
-                                <th>Date/Time</th>
-                                <th>Station</th>
-                                {filters.dataType === 'tides' ? (
-                                  <>
-                                    <th>High Tide (m)</th>
-                                    <th>High Tide Time</th>
-                                    <th>High Tide Temp (°C)</th>
-                                    <th>Low Tide (m)</th>
-                                    <th>Low Tide Time</th>
-                                    <th>Low Tide Temp (°C)</th>
-                                  </>
-                                ) : (
-                                  <>
-                                    <th>Sea Level (m)</th>
-                                    <th>Temperature (°C)</th>
-                                  </>
-                                )}
-                                <th>Anomaly</th>
-                                {filters.trendline !== 'none' && <th>Trendline Value</th>}
-                                {filters.analysisType !== 'none' && <th>Analysis Value</th>}
-                                {filters.predictionModels.includes('kalman') && <th>Kalman Forecast</th>}
-                                {filters.predictionModels.includes('ensemble') && <th>Ensemble Forecast</th>}
-                                {filters.predictionModels.includes('arima') && <th>ARIMA Prediction</th>}
-                              </tr>
-                            </thead>
+                    <Tabs activeKey={tableTab} onSelect={setTableTab} className="mb-2">
+                      <Tab eventKey="historical" title="Historical">
+                        <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                          {tableData.length > 0 ? (
+                            <>
+                              <table className="table table-dark table-striped table-sm">
+                                <thead>
+                                  <tr>
+                                    <th>Date/Time</th>
+                                    <th>Station</th>
+                                    {filters.dataType === 'tides' ? (
+                                      <>
+                                        <th>High Tide (m)</th>
+                                        <th>Low Tide (m)</th>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <th>Sea Level (m)</th>
+                                        <th>Temperature (°C)</th>
+                                      </>
+                                    )}
+                                    <th>Anomaly</th>
+                                    {filters.trendline !== 'none' && <th>Trendline</th>}
+                                    {filters.analysisType !== 'none' && <th>Analysis</th>}
+                                  </tr>
+                                </thead>
                             <tbody>
                               {tableData
                                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
@@ -1064,11 +1132,7 @@ function App() {
                                   {filters.dataType === 'tides' ? (
                                     <>
                                       <td>{row.HighTide?.toFixed(3) || 'N/A'}</td>
-                                      <td>{row.HighTideTime || 'N/A'}</td>
-                                      <td>{row.HighTideTemp?.toFixed(1) || 'N/A'}</td>
                                       <td>{row.LowTide?.toFixed(3) || 'N/A'}</td>
-                                      <td>{row.LowTideTime || 'N/A'}</td>
-                                      <td>{row.LowTideTemp?.toFixed(1) || 'N/A'}</td>
                                     </>
                                   ) : (
                                     <>
@@ -1079,54 +1143,6 @@ function App() {
                                   <td>{row.anomaly || 0}</td>
                                   {filters.trendline !== 'none' && <td>{typeof row.trendlineValue === 'number' ? row.trendlineValue.toFixed(3) : row.trendlineValue}</td>}
                                   {filters.analysisType !== 'none' && <td>{typeof row.analysisValue === 'number' ? row.analysisValue.toFixed(3) : row.analysisValue}</td>}
-                                  
-                                  {/* FIXED PREDICTION CELLS - Handle both object and number formats */}
-                                  {filters.predictionModels.includes('kalman') && (
-                                    <td>
-                                      {(() => {
-                                        if (!predictions.kalman || !predictions.kalman[idx]) return 'N/A';
-                                        const val = predictions.kalman[idx];
-                                        if (typeof val === 'object' && val.yhat !== undefined) {
-                                          return val.yhat.toFixed(3);
-                                        } else if (typeof val === 'number') {
-                                          return val.toFixed(3);
-                                        }
-                                        return 'N/A';
-                                      })()}
-                                    </td>
-                                  )}
-                                  
-                                  {filters.predictionModels.includes('ensemble') && (
-                                    <td>
-                                      {(() => {
-                                        if (!predictions.ensemble || !predictions.ensemble[idx]) return 'N/A';
-                                        const val = predictions.ensemble[idx];
-                                        if (typeof val === 'object' && val.yhat !== undefined) {
-                                          return val.yhat.toFixed(3);
-                                        } else if (typeof val === 'number') {
-                                          return val.toFixed(3);
-                                        }
-                                        return 'N/A';
-                                      })()}
-                                    </td>
-                                  )}
-                                  
-                                  {filters.predictionModels.includes('arima') && (
-                                    <td>
-                                      {(() => {
-                                        if (!predictions.arima || !predictions.arima[idx]) return 'N/A';
-                                        const val = predictions.arima[idx];
-                                        if (typeof val === 'object' && val.yhat !== undefined) {
-                                          return val.yhat.toFixed(3);
-                                        } else if (typeof val === 'object' && val.ds !== undefined && typeof val === 'number') {
-                                          return val.toFixed(3);
-                                        } else if (typeof val === 'number') {
-                                          return val.toFixed(3);
-                                        }
-                                        return 'N/A';
-                                      })()}
-                                    </td>
-                                  )}
                                 </tr>
                               ))}
                             </tbody>
@@ -1158,16 +1174,125 @@ function App() {
                             </div>
                           </div>
                         </>
-                      ) : (
-                        <p className="text-center">No data to display</p>
-                      )}
-                    </div>
+                          ) : (
+                            <p className="text-center">No data to display</p>
+                          )}
+                        </div>
+                      </Tab>
+                      <Tab eventKey="forecast" title="Forecast">
+                        <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                          {(() => {
+                            const predictionRows = [];
+                            
+                            Object.entries(predictions).forEach(([stationKey, stationPredictions]) => {
+                              if (stationKey === 'global_metadata' || !stationPredictions) return;
+                              
+                              ['kalman', 'ensemble', 'arima'].forEach(model => {
+                                if (stationPredictions[model] && Array.isArray(stationPredictions[model])) {
+                                  stationPredictions[model].forEach((pred) => {
+                                    predictionRows.push({
+                                      station: stationKey,
+                                      model: model,
+                                      datetime: pred.ds,
+                                      value: pred.yhat || pred,
+                                      type: pred.type || 'forecast',
+                                      uncertainty: pred.uncertainty,
+                                      upper: pred.yhat_upper,
+                                      lower: pred.yhat_lower
+                                    });
+                                  });
+                                }
+                              });
+                            });
+                            
+                            predictionRows.sort((a, b) => {
+                              if (a.station !== b.station) return a.station.localeCompare(b.station);
+                              if (a.model !== b.model) return a.model.localeCompare(b.model);
+                              return new Date(a.datetime) - new Date(b.datetime);
+                            });
+                            
+                            return predictionRows.length > 0 ? (
+                              <>
+                                <table className="table table-dark table-striped">
+                                <thead>
+                                  <tr>
+                                    <th>Station</th>
+                                    <th>Model</th>
+                                    <th>Date/Time</th>
+                                    <th>Predicted Level (m)</th>
+                                    <th>Type</th>
+                                    <th>Uncertainty</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {predictionRows
+                                    .slice((forecastPage - 1) * itemsPerPage, forecastPage * itemsPerPage)
+                                    .map((row, idx) => (
+                                    <tr key={idx}>
+                                      <td>{row.station}</td>
+                                      <td>
+                                        <Badge bg={row.model === 'kalman' ? 'success' : row.model === 'ensemble' ? 'warning' : 'info'}>
+                                          {row.model.toUpperCase()}
+                                        </Badge>
+                                      </td>
+                                      <td>{new Date(row.datetime).toISOString().replace('T', ' ').replace('.000Z', '')}</td>
+                                      <td>{typeof row.value === 'number' ? row.value.toFixed(3) : 'N/A'}</td>
+                                      <td>
+                                        <Badge bg={row.type === 'nowcast' ? 'primary' : 'secondary'}>
+                                          {row.type || 'forecast'}
+                                        </Badge>
+                                      </td>
+                                      <td>
+                                        {row.uncertainty ? `±${row.uncertainty.toFixed(3)}` : 
+                                         (row.upper && row.lower) ? `${row.lower.toFixed(3)} - ${row.upper.toFixed(3)}` : 'N/A'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="d-flex justify-content-between align-items-center mt-3">
+                                <span className="text-muted">
+                                  Showing {((forecastPage - 1) * itemsPerPage) + 1} to {Math.min(forecastPage * itemsPerPage, predictionRows.length)} of {predictionRows.length} entries
+                                </span>
+                                <div>
+                                  <Button 
+                                    variant="outline-primary"
+                                    size="sm"
+                                    className="me-2"
+                                    onClick={() => setForecastPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={forecastPage === 1}
+                                  >
+                                    Previous
+                                  </Button>
+                                  <span className="mx-2">Page {forecastPage} of {Math.ceil(predictionRows.length / itemsPerPage)}</span>
+                                  <Button 
+                                    variant="outline-primary"
+                                    size="sm"
+                                    className="ms-2"
+                                    onClick={() => setForecastPage(prev => Math.min(prev + 1, Math.ceil(predictionRows.length / itemsPerPage)))}
+                                    disabled={forecastPage === Math.ceil(predictionRows.length / itemsPerPage)}
+                                  >
+                                    Next
+                                  </Button>
+                                </div>
+                              </div>
+                              </>
+                            ) : (
+                              <p className="text-center">No predictions available. Select prediction models to see forecasts.</p>
+                            );
+                          })()
+                          }
+                        </div>
+                      </Tab>
+                    </Tabs>
                   </Tab>
                   
                   <Tab eventKey="map" title="Map View">
                     <Tabs activeKey={mapTab} onSelect={setMapTab} className="mb-2">
                       <Tab eventKey="osm" title="OpenStreetMap">
-                        <MapView />
+                        <Suspense fallback={<Spinner animation="border" />}>
+                          <MapView />
+                        </Suspense>
                       </Tab>
                       <Tab eventKey="govmap" title="GovMap">
                         <MapView />
@@ -1180,7 +1305,13 @@ function App() {
           </Col>
         </Row>
       </Container>
+      <div className="text-center mt-1 mb-3 me-3">
+        <small style={{ fontSize: '0.85rem' }}>
+          <strong>Disclaimer:</strong> Sea level forecast is based on sea level measurements only and is for informational purposes. Its accuracy is not guaranteed.
+        </small>
+      </div>
     </div>
+    </ErrorBoundary>
   );
 }
 

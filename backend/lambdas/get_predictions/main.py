@@ -293,11 +293,7 @@ def ensemble_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
             predictions['arima'] = arima_pred
             weights['arima'] = 0.3
     
-    if PROPHET_AVAILABLE:
-        prophet_pred = prophet_predict(station, steps)
-        if prophet_pred:
-            predictions['prophet'] = prophet_pred
-            weights['prophet'] = 0.2
+    # Prophet removed - not suitable for sea level predictions
     
     if not predictions:
         return None
@@ -339,7 +335,7 @@ def handler(event, context):
         logger.info(f"Received params: {params}")
         
         stations_param = params.get('stations') or params.get('station')
-        models = params.get('model', 'kalman').split(',')
+        models = [m.strip().lower() for m in params.get('model', 'kalman').split(',')]
         steps = int(params.get('steps', 240))
         
         logger.info(f"stations_param: {stations_param}")
@@ -377,10 +373,12 @@ def handler(event, context):
                     station_results['kalman'] = []
             
             # Ensemble prediction
-            if 'ensemble' in models:
+            if 'ensemble' in models or 'all' in models:
                 ensemble_result = ensemble_predict(station, steps)
                 if ensemble_result:
                     station_results['ensemble'] = ensemble_result
+                else:
+                    station_results['ensemble'] = []
             
             # Fallback models
             if 'arima' in models or 'all' in models:
@@ -390,12 +388,7 @@ def handler(event, context):
                 else:
                     station_results['arima'] = []
             
-            if 'prophet' in models or 'all' in models:
-                prophet_result = prophet_predict(station, steps)
-                if prophet_result:
-                    station_results['prophet'] = prophet_result
-                else:
-                    station_results['prophet'] = []
+            # Prophet removed - not suitable for sea level predictions
             
             # Add station metadata
             station_results['metadata'] = {

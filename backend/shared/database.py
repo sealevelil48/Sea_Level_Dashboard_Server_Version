@@ -30,13 +30,15 @@ engine = None
 if DB_URI:
     print(f"Connecting to database: {DB_URI[:50]}...")
     try:
+        from sqlalchemy.pool import QueuePool
         engine = create_engine(
-            DB_URI, 
-            pool_pre_ping=True, 
-            pool_size=5, 
-            max_overflow=10, 
-            pool_recycle=1800,
-            echo=False  # Set to True for SQL debugging
+            DB_URI,
+            poolclass=QueuePool,
+            pool_size=10,
+            max_overflow=20,
+            pool_pre_ping=True,  # Verify connections
+            pool_recycle=3600,   # Recycle after 1 hour
+            echo=False
         )
         print("✅ Database engine created successfully")
     except Exception as e:

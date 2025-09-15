@@ -22,13 +22,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_all_stations_from_db():
-    """Get all stations from database using raw SQL to avoid SQLAlchemy issues"""
+    """Get all stations using raw SQL to avoid SQLAlchemy issues"""
     if not DATABASE_AVAILABLE or not engine:
-        logger.warning("Database not available, returning demo stations")
-        return ['All Stations', 'Demo Station 1', 'Demo Station 2', 'Demo Station 3']
+        logger.warning("Database not available")
+        return ['All Stations', 'Demo Station 1', 'Demo Station 2']
     
     try:
-        # Use raw SQL to avoid SQLAlchemy Boolean clause issues
+        # FIX: Use raw SQL instead of SQLAlchemy ORM
         sql_query = text('''
             SELECT DISTINCT "Station" 
             FROM "Locations" 
@@ -41,16 +41,14 @@ def get_all_stations_from_db():
             stations = [row[0] for row in result if row[0] is not None]
             
             if not stations:
-                logger.warning("No stations found in database")
-                return ['All Stations', 'No stations found in database']
+                logger.warning("No stations found")
+                return ['All Stations', 'No stations found']
             
-            result_stations = ['All Stations'] + stations
-            logger.info(f"Found {len(stations)} real stations in database: {stations[:5]}...")
-            return result_stations
+            return ['All Stations'] + stations
             
     except Exception as e:
-        logger.error(f"Error fetching stations from database: {e}")
-        return ['All Stations', f'DB Error: {str(e)[:30]}...']
+        logger.error(f"Database error: {e}")
+        return ['All Stations', f'Error: {str(e)[:30]}']
 
 def handler(event, context):
     """Lambda handler for get_stations"""
