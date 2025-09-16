@@ -3,6 +3,8 @@ import { Container, Row, Col, Card, Form, Tabs, Tab, Badge, Button, Spinner } fr
 import Plot from 'react-plotly.js';
 import * as XLSX from 'xlsx';
 import ErrorBoundary from './components/ErrorBoundary';
+import DateRangePicker from './components/DateRangePicker';
+import CustomDropdown from './components/CustomDropdown';
 import { useFavorites } from './hooks/useFavorites';
 import apiService from './services/apiService';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -42,8 +44,8 @@ function App() {
 
   // Filter states - Modified with 3 days default
   const [filters, setFilters] = useState({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    endDate: new Date(),
     dataType: 'default',
     trendline: 'none',
     analysisType: 'none',
@@ -193,8 +195,8 @@ function App() {
         for (const station of stationList) {
           const params = {
             station: station,
-            start_date: filters.startDate,
-            end_date: filters.endDate,
+            start_date: filters.startDate.toISOString().split('T')[0],
+            end_date: filters.endDate.toISOString().split('T')[0],
             data_source: filters.dataType,
             show_anomalies: filters.showAnomalies.toString()
           };
@@ -212,8 +214,8 @@ function App() {
         for (const station of selectedStations.filter(s => s !== 'All Stations').slice(0, 3)) {
           const params = {
             station: station,
-            start_date: filters.startDate,
-            end_date: filters.endDate,
+            start_date: filters.startDate.toISOString().split('T')[0],
+            end_date: filters.endDate.toISOString().split('T')[0],
             data_source: filters.dataType,
             show_anomalies: filters.showAnomalies.toString()
           };
@@ -285,8 +287,8 @@ function App() {
     }
   }, [
     // Remove predictions from dependencies
-    filters.startDate, 
-    filters.endDate, 
+    filters.startDate.getTime(), 
+    filters.endDate.getTime(), 
     filters.dataType,
     filters.showAnomalies,
     filters.trendline,
@@ -313,7 +315,7 @@ function App() {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [filters.startDate, filters.endDate, filters.dataType, filters.showAnomalies, selectedStations, stations.length]);
+  }, [filters.startDate.getTime(), filters.endDate.getTime(), filters.dataType, filters.showAnomalies, selectedStations, stations.length]);
 
   // Separate effect for predictions - support multiple stations
   useEffect(() => {
@@ -347,6 +349,11 @@ function App() {
   // Handle filter changes
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Handle date range change
+  const handleDateRangeChange = (startDate, endDate) => {
+    setFilters(prev => ({ ...prev, startDate, endDate }));
   };
 
   // Handle model selection
@@ -555,11 +562,32 @@ function App() {
         }
       }
 
-      // Add trendline if selected
+      // Add trendlines if selected - separate for each station
       if (filters.trendline !== 'none') {
-        const trendline = calculateTrendline(graphData, filters.trendline);
-        if (trendline) {
-          traces.push(trendline);
+        const trendlineColors = ['yellow', 'orange', 'lime', 'cyan', 'magenta'];
+        let colorIndex = 0;
+        
+        if (selectedStations.includes('All Stations')) {
+          // Collective trendline for all stations
+          const trendline = calculateTrendline(graphData, filters.trendline);
+          if (trendline) {
+            trendline.name = `Collective Trendline (${filters.trendline})`;
+            traces.push(trendline);
+          }
+        } else {
+          // Individual trendlines for each selected station
+          selectedStations.forEach(station => {
+            const stationData = graphData.filter(d => d.Station === station);
+            if (stationData.length > 1) {
+              const trendline = calculateTrendline(stationData, filters.trendline);
+              if (trendline) {
+                trendline.name = `${station} Trendline (${filters.trendline})`;
+                trendline.line.color = trendlineColors[colorIndex % trendlineColors.length];
+                colorIndex++;
+                traces.push(trendline);
+              }
+            }
+          });
         }
       }
 
@@ -781,9 +809,9 @@ function App() {
   const MapView = useCallback(() => {
     if (mapTab === 'govmap') {
       return (
-        <div style={{ width: '100%', height: '500px', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: 'clamp(300px, 50vh, 500px)', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
           <iframe
-            src={`${API_BASE_URL}/mapframe?end_date=${filters.endDate}`}
+            src={`${API_BASE_URL}/mapframe?end_date=${filters.endDate.toISOString().split('T')[0]}`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="GovMap"
             allow="geolocation; accelerometer; clipboard-write"
@@ -815,31 +843,25 @@ function App() {
         </div>
 
         {/* Main Content */}
-        <Container fluid className="p-3">
-        <Row>
+        <Container fluid className="p-1 p-md-3">
+        <Row className="g-2">
           {/* Filters Column */}
-          <Col md={3}>
-            <Card className="filters-card">
-              <Card.Body>
-                <h5 className="mb-3">Filters</h5>
+          <Col xs={12} lg={3} xl={2}>
+            <Card className="filters-card h-100">
+              <Card.Body className="p-2" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+                <h6 className="mb-2">Filters</h6>
                 
-                <Form.Group className="mb-3">
-                  <Form.Label>Date Range</Form.Label>
-                  <Form.Control
-                    type="date"
-                    value={filters.startDate}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                    className="mb-2"
-                  />
-                  <Form.Control
-                    type="date"
-                    value={filters.endDate}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                <Form.Group className="mb-2">
+                  <Form.Label className="small mb-1">Date Range</Form.Label>
+                  <DateRangePicker
+                    startDate={filters.startDate}
+                    endDate={filters.endDate}
+                    onChange={handleDateRangeChange}
                   />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Stations ({selectedStations.length}/3)</Form.Label>
+                <Form.Group className="mb-2">
+                  <Form.Label className="small mb-1">Stations ({selectedStations.length}/3)</Form.Label>
                   {stations.map(station => (
                     <div key={station} className="d-flex align-items-center">
                       <Form.Check
@@ -863,133 +885,130 @@ function App() {
                       )}
                     </div>
                   ))}
-                  <small className="text-muted">Select up to 3 stations or "All Stations"</small>
+                  <small className="text-muted" style={{ fontSize: '0.7rem' }}>Select up to 3 stations</small>
                   {favorites.length > 0 && (
-                    <div className="mt-2">
-                      <small className="text-info">Favorites: {favorites.join(', ')}</small>
+                    <div className="mt-1">
+                      <small className="text-info" style={{ fontSize: '0.7rem' }}>Favorites: {favorites.join(', ')}</small>
                     </div>
                   )}
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Data Type</Form.Label>
-                  <Form.Select
+                <Form.Group className="mb-2">
+                  <Form.Label className="small mb-1">Data Type</Form.Label>
+                  <CustomDropdown
                     value={filters.dataType}
-                    onChange={(e) => handleFilterChange('dataType', e.target.value)}
-                  >
-                    <option value="default">Default</option>
-                    <option value="tides">Tidal Data</option>
-                  </Form.Select>
+                    onChange={(value) => handleFilterChange('dataType', value)}
+                    options={[
+                      { value: 'default', label: 'Default' },
+                      { value: 'tides', label: 'Tidal Data' }
+                    ]}
+                  />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Trendline Period</Form.Label>
-                  <Form.Select
+                <Form.Group className="mb-2">
+                  <Form.Label className="small mb-1">Trendline Period</Form.Label>
+                  <CustomDropdown
                     value={filters.trendline}
-                    onChange={(e) => handleFilterChange('trendline', e.target.value)}
-                  >
-                    <option value="none">None</option>
-                    <option value="7d">7 Days</option>
-                    <option value="30d">30 Days</option>
-                    <option value="90d">90 Days</option>
-                    <option value="1y">1 Year</option>
-                    <option value="last_decade">Last Decade</option>
-                    <option value="last_two_decades">Last Two Decades</option>
-                    <option value="all">All Time</option>
-                  </Form.Select>
+                    onChange={(value) => handleFilterChange('trendline', value)}
+                    options={[
+                      { value: 'none', label: 'None' },
+                      { value: '7d', label: '7 Days' },
+                      { value: '30d', label: '30 Days' },
+                      { value: '90d', label: '90 Days' },
+                      { value: '1y', label: '1 Year' },
+                      { value: 'last_decade', label: 'Last Decade' },
+                      { value: 'last_two_decades', label: 'Last Two Decades' },
+                      { value: 'all', label: 'All Time' }
+                    ]}
+                  />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Analysis Type</Form.Label>
-                  <Form.Select
+                <Form.Group className="mb-2">
+                  <Form.Label className="small mb-1">Analysis Type</Form.Label>
+                  <CustomDropdown
                     value={filters.analysisType}
-                    onChange={(e) => handleFilterChange('analysisType', e.target.value)}
-                  >
-                    <option value="none">None</option>
-                    <option value="rolling_avg_3h">3-Hour Average</option>
-                    <option value="rolling_avg_6h">6-Hour Average</option>
-                    <option value="rolling_avg_24h">24-Hour Average</option>
-                    <option value="all">All Analyses</option>
-                  </Form.Select>
+                    onChange={(value) => handleFilterChange('analysisType', value)}
+                    options={[
+                      { value: 'none', label: 'None' },
+                      { value: 'rolling_avg_3h', label: '3-Hour Average' },
+                      { value: 'rolling_avg_6h', label: '6-Hour Average' },
+                      { value: 'rolling_avg_24h', label: '24-Hour Average' },
+                      { value: 'all', label: 'All Analyses' }
+                    ]}
+                  />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Forecast Period</Form.Label>
-                  <Form.Select
+                <Form.Group className="mb-2">
+                  <Form.Label className="small mb-1">Forecast Period</Form.Label>
+                  <CustomDropdown
                     value={filters.forecastHours}
-                    onChange={(e) => handleFilterChange('forecastHours', parseInt(e.target.value))}
-                  >
-                    <option value="24">24H</option>
-                    <option value="48">48H</option>
-                    <option value="72">72H</option>
-                  </Form.Select>
+                    onChange={(value) => handleFilterChange('forecastHours', parseInt(value))}
+                    options={[
+                      { value: '24', label: '24H' },
+                      { value: '48', label: '48H' },
+                      { value: '72', label: '72H' }
+                    ]}
+                  />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
+                <Form.Group className="mb-2">
                   <Form.Check
                     type="checkbox"
                     label="Show Anomalies"
                     checked={filters.showAnomalies}
                     onChange={(e) => handleFilterChange('showAnomalies', e.target.checked)}
+                    className="small"
                   />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Prediction Models</Form.Label>
+                <Form.Group className="mb-2">
+                  <Form.Label className="small mb-1">Prediction Models</Form.Label>
                   <div style={{ 
                     backgroundColor: '#0c1c35', 
-                    padding: '10px', 
-                    borderRadius: '5px',
+                    padding: '6px', 
+                    borderRadius: '4px',
                     border: '1px solid #2a3f5f'
                   }}>
                     <Form.Check
                       type="checkbox"
                       id="kalman-check"
-                      label={
-                        <span title="The Kalman Filter is a powerful algorithm that provides an optimal estimate of the state of a dynamic system from a series of noisy measurements. It's like a sophisticated GPS that constantly refines its location estimate. By tracking the system's past behavior and accounting for known uncertainties, it makes highly accurate short-term forecasts. Learn more: https://en.wikipedia.org/wiki/Kalman_filter">
-                          <strong>Kalman Filter</strong>
-                        </span>
-                      }
+                      label="Kalman Filter"
                       checked={filters.predictionModels?.includes('kalman') || false}
                       onChange={() => handleModelChange('kalman')}
+                      className="small"
                     />
                     <Form.Check
                       type="checkbox"
                       id="ensemble-check"
-                      label={
-                        <span title="Ensemble modeling combines the predictions from multiple independent models to produce a single, more robust and accurate forecast. Instead of relying on a single expert, this method is like taking a poll of many different experts. By averaging their predictions, the errors tend to cancel each other out. Learn more: https://en.wikipedia.org/wiki/Ensemble_learning">
-                          <strong>Ensemble</strong>
-                        </span>
-                      }
+                      label="Ensemble"
                       checked={filters.predictionModels?.includes('ensemble') || false}
                       onChange={() => handleModelChange('ensemble')}
+                      className="small"
                     />
                     <Form.Check
                       type="checkbox"
                       id="arima-check"
-                      label={
-                        <span title="ARIMA (Autoregressive Integrated Moving Average) is a statistical model used for time series data analysis and forecasting. It uses patterns in historical data to predict future values by combining autoregressive, integrated, and moving average components to capture repeating patterns and trends in sea level data. Learn more: https://en.wikipedia.org/wiki/Autoregressive_integrated_moving_average">
-                          <strong>ARIMA</strong>
-                        </span>
-                      }
+                      label="ARIMA"
                       checked={filters.predictionModels?.includes('arima') || false}
                       onChange={() => handleModelChange('arima')}
+                      className="small"
                     />
                   </div>
                   {selectedStations.length > 3 && filters.predictionModels.length > 0 && (
-                    <small className="text-warning">
-                      Predictions limited to 3 stations maximum
+                    <small className="text-warning" style={{ fontSize: '0.7rem' }}>
+                      Max 3 stations
                     </small>
                   )}
                 </Form.Group>
 
-                <Row className="mt-4">
+                <Row className="mt-2">
                   <Col>
                     <Button 
                       variant="outline-primary"
                       size="sm"
-                      className="w-100"
+                      className="w-100 py-1"
                       onClick={exportGraph}
+                      style={{ fontSize: '0.75rem' }}
                     >
                       Export Graph
                     </Button>
@@ -998,8 +1017,9 @@ function App() {
                     <Button 
                       variant="outline-primary"
                       size="sm"
-                      className="w-100"
+                      className="w-100 py-1"
                       onClick={exportTable}
+                      style={{ fontSize: '0.75rem' }}
                     >
                       Export Table
                     </Button>
@@ -1010,7 +1030,7 @@ function App() {
           </Col>
 
           {/* Content Column */}
-          <Col md={9}>
+          <Col xs={12} lg={9} xl={10}>
             {/* Stats Cards */}
             <Row className="mb-3">
               <Col md={3}>
@@ -1075,7 +1095,7 @@ function App() {
                         data={createPlot.data}
                         layout={createPlot.layout}
                         config={{ responsive: true }}
-                        style={{ width: '100%', height: '400px' }}
+                        style={{ width: '100%', height: 'clamp(300px, 50vh, 500px)' }}
                         useResizeHandler={true}
                       />
                     ) : (
@@ -1098,7 +1118,7 @@ function App() {
                   <Tab eventKey="table" title="Table View">
                     <Tabs activeKey={tableTab} onSelect={setTableTab} className="mb-2">
                       <Tab eventKey="historical" title="Historical">
-                        <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                        <div style={{ overflowX: 'auto', maxHeight: 'clamp(300px, 40vh, 400px)' }}>
                           {tableData.length > 0 ? (
                             <>
                               <table className="table table-dark table-striped table-sm">
@@ -1180,7 +1200,7 @@ function App() {
                         </div>
                       </Tab>
                       <Tab eventKey="forecast" title="Forecast">
-                        <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                        <div style={{ overflowX: 'auto', maxHeight: 'clamp(300px, 40vh, 400px)' }}>
                           {(() => {
                             const predictionRows = [];
                             
@@ -1305,11 +1325,6 @@ function App() {
           </Col>
         </Row>
       </Container>
-      <div className="text-center mt-1 mb-3 me-3">
-        <small style={{ fontSize: '0.85rem' }}>
-          <strong>Disclaimer:</strong> Sea level forecast is based on sea level measurements only and is for informational purposes. Its accuracy is not guaranteed.
-        </small>
-      </div>
     </div>
     </ErrorBoundary>
   );
