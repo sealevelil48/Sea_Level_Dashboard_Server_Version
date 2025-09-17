@@ -12,6 +12,7 @@ import './App.css';
 
 // Lazy load heavy components
 const OSMMap = lazy(() => import('./components/OSMMap'));
+const SeaForecastView = lazy(() => import('./components/SeaForecastView'));
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://sea-level-dash-local:8001';
 
@@ -20,6 +21,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('graph');
   const [mapTab, setMapTab] = useState('osm');
   const [tableTab, setTableTab] = useState('historical');
+  const [forecastData, setForecastData] = useState(null);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [graphData, setGraphData] = useState([]);
@@ -63,6 +65,7 @@ function App() {
   // Fetch stations on mount
   useEffect(() => {
     fetchStations();
+    fetchSeaForecast();
   }, []);
 
   const fetchStations = async () => {
@@ -74,6 +77,18 @@ function App() {
       console.error('Error fetching stations:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSeaForecast = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/sea-forecast`);
+      if (response.ok) {
+        const data = await response.json();
+        setForecastData(data);
+      }
+    } catch (error) {
+      console.error('Error fetching sea forecast:', error);
     }
   };
 
@@ -825,10 +840,11 @@ function App() {
           stations={stations.filter(s => s !== 'All Stations')}
           currentStation={selectedStations[0]}
           mapData={graphData}
+          forecastData={forecastData}
         />
       );
     }
-  }, [mapTab, stations, selectedStations, graphData, filters.endDate]);
+  }, [mapTab, stations, selectedStations, graphData, filters.endDate, forecastData]);
 
   return (
     <ErrorBoundary>
@@ -1318,6 +1334,12 @@ function App() {
                         <MapView />
                       </Tab>
                     </Tabs>
+                  </Tab>
+                  
+                  <Tab eventKey="forecast" title="Waves Forecast">
+                    <Suspense fallback={<Spinner animation="border" />}>
+                      <SeaForecastView apiBaseUrl={API_BASE_URL} />
+                    </Suspense>
                   </Tab>
                 </Tabs>
               </Card.Body>

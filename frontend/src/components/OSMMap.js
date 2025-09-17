@@ -11,7 +11,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
 });
 
-const OSMMap = ({ stations, currentStation, mapData }) => {
+const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
@@ -26,6 +26,8 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
     'Haifa': [32.8191, 34.9983],
     'Yafo': [32.0535, 34.7503]
   };
+
+
 
   // Check visibility
   useEffect(() => {
@@ -47,6 +49,7 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
 
     const initMap = () => {
       try {
+        console.log('Initializing OSM map...');
         mapInstanceRef.current = L.map(mapRef.current, {
           center: [31.5, 34.8],
           zoom: 7,
@@ -57,15 +60,16 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
           attribution: '© OpenStreetMap contributors',
           maxZoom: 18
         }).addTo(mapInstanceRef.current);
+        
+        console.log('OSM map initialized successfully');
 
-        // Add markers with click handlers
+        // Add station markers
         Object.entries(stationCoordinates).forEach(([station, coords]) => {
           const marker = L.marker(coords).addTo(mapInstanceRef.current);
           marker.bindTooltip(station);
           marker.bindPopup(`<h4>${station}</h4><p>Loading data...</p>`);
           markersRef.current[station] = marker;
 
-          // Update popup on click
           marker.on('click', () => {
             const stationData = mapData?.filter(d => d.Station === station) || [];
             const latestData = stationData.length > 0 ? stationData[stationData.length - 1] : null;
@@ -87,9 +91,19 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
         // Center map properly after everything loads
         setTimeout(() => {
           if (mapInstanceRef.current) {
+            console.log('Resizing map and fitting bounds');
             mapInstanceRef.current.invalidateSize();
-            const group = new L.featureGroup(Object.values(markersRef.current));
-            mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
+            const allMarkers = Object.values(markersRef.current).filter(m => m);
+            if (allMarkers.length > 0) {
+              const group = new L.featureGroup(allMarkers);
+              mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
+            }
+            console.log('Map setup complete, adding forecast markers if available');
+            
+            // Add forecast markers if data is already available
+            if (forecastData?.locations) {
+              addForecastMarkers();
+            }
           }
         }, 300);
         
@@ -98,8 +112,131 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
       }
     };
 
+    const addForecastMarkers = () => {
+      if (!mapInstanceRef.current || !forecastData?.locations) return;
+      
+      console.log('Adding forecast markers for', forecastData.locations.length, 'locations');
+      
+      // Remove existing forecast markers
+      Object.keys(markersRef.current).forEach(key => {
+        if (key.startsWith('forecast_')) {
+          try {
+            if (markersRef.current[key] && mapInstanceRef.current) {
+              mapInstanceRef.current.removeLayer(markersRef.current[key]);
+            }
+          } catch (e) {
+            console.warn('Error removing forecast marker:', e);
+          }
+          delete markersRef.current[key];
+        }
+      });
+      
+      // Add new forecast markers
+      forecastData.locations.forEach((location, index) => {
+        const coords = [location.coordinates.lat, location.coordinates.lng];
+        console.log(`Adding forecast marker ${index + 1}: ${location.name_eng} at [${coords[0]}, ${coords[1]}]`);
+        
+        const forecastIcon = L.icon({
+          iconUrl: '/assets/ims-wave-icon.svg',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+          popupAnchor: [0, -12]
+        });
+        
+        const marker = L.marker(coords, { icon: forecastIcon }).addTo(mapInstanceRef.current);
+        
+        const currentForecast = location.forecasts[0];
+        const popupContent = `
+          <div style="font-family: Arial, sans-serif; min-width: 200px;">
+            <h4 style="margin: 0 0 10px 0; color: #ff8c00;">${location.name_eng}</h4>
+            <p style="font-size: 12px; color: #666;">${location.name_heb}</p>
+            <p><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</p>
+            <p><strong>Sea Temp:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
+            <p><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</p>
+            <p style="font-size: 11px; color: #888;">
+              <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
+            </p>
+          </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+        marker.bindTooltip(`${location.name_eng} (Forecast)`);
+        markersRef.current[`forecast_${location.id}`] = marker;
+        console.log(`Forecast marker added for ${location.name_eng}`);
+      });
+      
+      console.log('Total forecast markers added:', forecastData.locations.length);
+    };
+
     setTimeout(initMap, 100);
-  }, [isVisible]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible, mapData]);
+
+  // Add forecast markers when forecast data changes
+  useEffect(() => {
+    console.log('Forecast useEffect triggered. mapInstance:', !!mapInstanceRef.current, 'forecastData:', !!forecastData?.locations, 'locations count:', forecastData?.locations?.length);
+    
+    if (mapInstanceRef.current && forecastData?.locations) {
+      // Map is ready and we have forecast data
+      const addForecastMarkers = () => {
+        console.log('Adding forecast markers for', forecastData.locations.length, 'locations');
+        
+        // Remove existing forecast markers
+        Object.keys(markersRef.current).forEach(key => {
+          if (key.startsWith('forecast_')) {
+            try {
+              if (markersRef.current[key] && mapInstanceRef.current) {
+                mapInstanceRef.current.removeLayer(markersRef.current[key]);
+              }
+            } catch (e) {
+              console.warn('Error removing forecast marker:', e);
+            }
+            delete markersRef.current[key];
+          }
+        });
+        
+        // Add new forecast markers
+        forecastData.locations.forEach((location, index) => {
+          const coords = [location.coordinates.lat, location.coordinates.lng];
+          console.log(`Adding forecast marker ${index + 1}: ${location.name_eng} at [${coords[0]}, ${coords[1]}]`);
+          
+          const forecastIcon = L.icon({
+            iconUrl: '/assets/ims-wave-icon.svg',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+            popupAnchor: [0, -12]
+          });
+          
+          const marker = L.marker(coords, { icon: forecastIcon }).addTo(mapInstanceRef.current);
+          
+          const currentForecast = location.forecasts[0];
+          const popupContent = `
+            <div style="font-family: Arial, sans-serif; min-width: 200px;">
+              <h4 style="margin: 0 0 10px 0; color: #ff8c00;">${location.name_eng}</h4>
+              <p style="font-size: 12px; color: #666;">${location.name_heb}</p>
+              <p><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</p>
+              <p><strong>Sea Temp:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
+              <p><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</p>
+              <p style="font-size: 11px; color: #888;">
+                <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
+              </p>
+            </div>
+          `;
+          
+          marker.bindPopup(popupContent);
+          marker.bindTooltip(`${location.name_eng} (Forecast)`);
+          markersRef.current[`forecast_${location.id}`] = marker;
+          console.log(`Forecast marker added for ${location.name_eng}`);
+        });
+        
+        console.log('Total forecast markers added:', forecastData.locations.length);
+      };
+      
+      addForecastMarkers();
+    } else {
+      console.log('Map instance not ready or no forecast data, skipping forecast markers');
+    }
+  }, [forecastData]);
 
   // Update marker popups when data changes
   useEffect(() => {
@@ -140,12 +277,24 @@ const OSMMap = ({ stations, currentStation, mapData }) => {
     return () => {
       if (mapInstanceRef.current) {
         try {
+          // Clear all markers first
+          Object.values(markersRef.current).forEach(marker => {
+            try {
+              if (marker && mapInstanceRef.current) {
+                mapInstanceRef.current.removeLayer(marker);
+              }
+            } catch (e) {
+              console.warn('Error removing marker during cleanup:', e);
+            }
+          });
+          markersRef.current = {};
+          
+          // Remove map
           mapInstanceRef.current.remove();
         } catch (e) {
           console.warn('Map cleanup warning:', e);
         }
         mapInstanceRef.current = null;
-        markersRef.current = {};
         setIsVisible(false);
       }
     };

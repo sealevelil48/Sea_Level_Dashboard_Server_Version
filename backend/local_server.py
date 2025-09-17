@@ -51,6 +51,9 @@ try:
     sys.path.insert(0, str(current_dir / "lambdas" / "get_station_map"))
     from lambdas.get_station_map.main import handler as get_station_map_handler
     
+    sys.path.insert(0, str(current_dir / "lambdas" / "get_sea_forecast"))
+    from lambdas.get_sea_forecast.main import lambda_handler as get_sea_forecast_handler
+    
     LAMBDA_HANDLERS_AVAILABLE = True
     print("✅ Lambda handlers loaded successfully")
     
@@ -569,6 +572,20 @@ async def get_api_station_map():
     except Exception as e:
         logger.error(f"Error in get_api_station_map: {e}")
         return []
+
+@app.get("/sea-forecast")
+async def get_sea_forecast():
+    """Get IMS sea forecast data"""
+    if not LAMBDA_HANDLERS_AVAILABLE:
+        return {"message": "Demo forecast data - Lambda handlers not available", "locations": []}
+    
+    try:
+        event = {}
+        response = get_sea_forecast_handler(event, None)
+        return lambda_response_to_fastapi(response)
+    except Exception as e:
+        logger.error(f"Error in get_sea_forecast: {e}")
+        return {"error": str(e), "locations": []}
 
 @app.get("/mapframe")
 async def get_mapframe(end_date: str = None):
