@@ -34,7 +34,6 @@
         <div>
             <h3>GovMap Unavailable</h3>
             <p>Unable to load GovMap API or station data</p>
-            <p>This may be due to network issues or API limitations</p>
         </div>
     </div>
     <script>
@@ -53,6 +52,7 @@
         
         let mapInstance;
         let stationsData = [];
+        let forecastData = [];
         
         window.onload = function() {
             try {
@@ -62,61 +62,123 @@
                 
                 govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e";
                 
-                // Function to fetch and display stations
+                const convertToITM = (lon, lat) => {
+                    const x = 219529 + (lon - 35.2045) * 111320 * Math.cos(lat * Math.PI / 180);
+                    const y = 626907 + (lat - 31.7344) * 111320;
+                    return { x: Math.round(x), y: Math.round(y) };
+                };
+                
+                const displayAllMarkers = () => {
+                    if (stationsData.length === 0 && forecastData.length === 0) return;
+                    
+                    const wkts = [];
+                    const names = [];
+                    const symbols = [];
+                    const tooltips = [];
+                    const bubbleHTMLParameters = [];
+                    
+                    // Add stations
+                    stationsData.forEach((station) => {
+                        wkts.push(`POINT(${station.x} ${station.y})`);
+                        names.push(`station_${station.Station}`);
+                        symbols.push({
+                            url: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#2196F3"/></svg>'),
+                            width: 32,
+                            height: 32
+                        });
+                        tooltips.push(`${station.Station} - ${station.latest_value}m`);
+                        bubbleHTMLParameters.push([
+                            station.Station,
+                            `<strong>Sea Level:</strong> ${station.latest_value} m`,
+                            `<strong>Last Update:</strong> ${station.last_update}`,
+                            `<strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`,
+                            '',
+                            ''
+                        ]);
+                    });
+                    
+                    // Add forecasts
+                    forecastData.forEach((location) => {
+                        const coords = location.coordinates;
+                        const itm = convertToITM(coords.lng, coords.lat);
+                        wkts.push(`POINT(${itm.x} ${itm.y})`);
+                        names.push(`forecast_${location.name_eng}`);
+                        symbols.push({
+                            url: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#FF9800"/></svg>'),
+                            width: 32,
+                            height: 32
+                        });
+                        
+                        const currentForecast = location.forecasts[0];
+                        tooltips.push(`${location.name_eng} - Wave Forecast`);
+                        bubbleHTMLParameters.push([
+                            location.name_eng,
+                            `<strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}`,
+                            `<strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C`,
+                            `<strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}`,
+                            `<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div>`,
+                            ''
+                        ]);
+                    });
+                    
+                    govmap.displayGeometries({
+                        wkts: wkts,
+                        names: names,
+                        geometryType: govmap.geometryType.POINT,
+                        symbols: symbols,
+                        clearExisting: true,
+                        data: {
+                            tooltips: tooltips,
+                            bubbleHTML: `
+                                <div style="font-family: Arial, sans-serif; padding: 15px; min-width: 250px;">
+                                    <h4 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;">{{0}}</h4>
+                                    <div style="margin: 8px 0;">{{1}}</div>
+                                    <div style="margin: 8px 0;">{{2}}</div>
+                                    <div style="margin: 8px 0;">{{3}}</div>
+                                    {{4}}
+                                    {{5}}
+                                </div>
+                            `,
+                            bubbleHTMLParameters: bubbleHTMLParameters
+                        }
+                    });
+                };
+                
                 const fetchAndDisplayStations = (endDate) => {
-                    console.log('Fetching stations for date:', endDate);
                     fetch(`/stations/map?end_date=${endDate}`)
                         .then(response => response.json())
                         .then(data => {
                             if (!Array.isArray(data) || data.length === 0) {
                                 throw new Error('No station data');
                             }
-                            
                             stationsData = data;
-                            
-                            // Clear existing geometries and display new ones
-                            const circleGeometries = [];
-                            const names = [];
-                            
-                            data.forEach((station) => {
-                                const itm = convertToITM(station.longitude, station.latitude);
-                                circleGeometries.push({
-                                    x: itm.x,
-                                    y: itm.y,
-                                    radius: 2000
-                                });
-                                names.push(`${station.name} - ${station.latest_value}m`);
-                            });
-                            
-                            govmap.displayGeometries({
-                                circleGeometries: circleGeometries,
-                                names: names,
-                                geometryType: govmap.geometryType.CIRCLE,
-                                clearExisting: true,
-                                defaultSymbol: {
-                                    outlineColor: [255, 0, 0, 1],
-                                    outlineWidth: 3,
-                                    fillColor: [255, 0, 0, 0.5]
-                                }
-                            });
-                            
+                            displayAllMarkers();
                             showMap();
                         })
                         .catch(error => showError('Failed: ' + error.message));
                 };
                 
-                // Listen for date updates from parent
+                const fetchWaveForecast = () => {
+                    fetch('/sea-forecast')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data && data.locations) {
+                                forecastData = data.locations;
+                                displayAllMarkers();
+                            }
+                        })
+                        .catch(error => console.warn('Wave forecast fetch failed:', error));
+                };
+                
                 window.addEventListener('message', (event) => {
                     if (event.data && event.data.type === 'UPDATE_DATE') {
-                        console.log('Received date update:', event.data.payload);
                         fetchAndDisplayStations(event.data.payload);
                     }
                 });
                 
-                // Initial load
-                fetchAndDisplayStations('2025-09-02')
+                fetchAndDisplayStations('2025-09-02');
+                fetchWaveForecast();
                 
-                // Create map and conversion function
                 mapInstance = govmap.createMap("map", {
                     token: govmap.token,
                     layers: [],
@@ -125,46 +187,14 @@
                     basemap: '2'
                 });
                 
-                // Convert WGS84 to ITM coordinates
-                const convertToITM = (lon, lat) => {
-                    const x = (lon - 34.0) * 111320 * Math.cos(lat * Math.PI / 180) + 150000;
-                    const y = (lat - 29.5) * 111320 + 500000;
-                    return { x: Math.round(x), y: Math.round(y) };
-                };
-                
-                // Add click event for popups
-                govmap.onEvent('click', function(event) {
-                    if (event && event.name) {
-                        const stationName = event.name.split(' - ')[0];
-                        const station = stationsData.find(s => s.name === stationName);
-                        if (station) {
-                            const itm = convertToITM(station.longitude, station.latitude);
-                            govmap.displayPopup({
-                                x: itm.x,
-                                y: itm.y,
-                                content: `
-                                    <div style="font-family: Arial, sans-serif; padding: 10px; min-width: 200px;">
-                                        <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${station.name} Station</h4>
-                                        <p style="margin: 5px 0;"><strong>Latest Value:</strong> ${station.latest_value} m</p>
-                                        <p style="margin: 5px 0;"><strong>Last Update:</strong> ${station.last_update}</p>
-                                        <p style="margin: 5px 0;"><strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}</p>
-                                    </div>
-                                `
-                            });
-                        }
-                    }
-                });
-                    
             } catch (error) {
                 showError('Init failed: ' + error.message);
             }
         };
         
-        // Listen for station updates from parent
         window.addEventListener('message', function(event) {
             if (event.data && event.data.type === 'UPDATE_STATIONS') {
                 stationsData = event.data.stations;
-                console.log('Received updated station data:', stationsData.length, 'stations');
             }
         });
     </script>

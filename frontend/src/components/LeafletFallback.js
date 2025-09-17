@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { Button, Modal } from 'react-bootstrap';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import moment from 'moment';
+import SeaForecastView from './SeaForecastView';
 
 // Fix for default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -14,6 +16,7 @@ L.Icon.Default.mergeOptions({
 
 const LeafletFallback = ({ filters, apiBaseUrl }) => {
   const [mapData, setMapData] = useState([]);
+  const [showWaveForecast, setShowWaveForecast] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,21 +62,55 @@ const LeafletFallback = ({ filters, apiBaseUrl }) => {
   }
 
   return (
-    <MapContainer center={[31.5, 34.75]} zoom={6} style={{ height: '500px', width: '100%' }}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      {mapData.map(station => (
-        <Marker key={station.Station} position={[station.latitude, station.longitude]}>
-          <Popup>
-            <b>{station.name || station.Station}</b><br />
-            Sea Level (m): {typeof station.latest_value === 'number' ? station.latest_value.toFixed(3) : station.latest_value}<br />
-            Last Update: {station.last_update}
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+    <div style={{ position: 'relative' }}>
+      {/* Wave Forecast Button */}
+      <Button
+        variant="info"
+        size="sm"
+        onClick={() => setShowWaveForecast(true)}
+        style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          zIndex: 1000,
+          backgroundColor: '#17a2b8',
+          borderColor: '#17a2b8'
+        }}
+      >
+        🌊 Wave Forecast
+      </Button>
+
+      <MapContainer center={[31.5, 34.75]} zoom={6} style={{ height: '500px', width: '100%' }}>
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        />
+        {mapData.map(station => (
+          <Marker key={station.Station} position={[station.latitude, station.longitude]}>
+            <Popup>
+              <b>{station.name || station.Station}</b><br />
+              Sea Level (m): {typeof station.latest_value === 'number' ? station.latest_value.toFixed(3) : station.latest_value}<br />
+              Last Update: {station.last_update}
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+
+      {/* Wave Forecast Modal */}
+      <Modal 
+        show={showWaveForecast} 
+        onHide={() => setShowWaveForecast(false)}
+        size="xl"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>🌊 Wave Forecast</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <SeaForecastView apiBaseUrl={apiBaseUrl} />
+        </Modal.Body>
+      </Modal>
+    </div>
   );
 };
 

@@ -6,7 +6,8 @@ Windows-compatible version with better error handling
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import json
 import pandas as pd
 from datetime import datetime, timedelta
@@ -92,6 +93,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for assets
+frontend_assets_path = project_root / "frontend" / "public" / "assets"
+if frontend_assets_path.exists():
+    app.mount("/assets", StaticFiles(directory=str(frontend_assets_path)), name="assets")
 
 # Global variables for server management
 frontend_process = None
@@ -587,112 +593,28 @@ async def get_sea_forecast():
         logger.error(f"Error in get_sea_forecast: {e}")
         return {"error": str(e), "locations": []}
 
+@app.get("/assets/{filename}")
+async def get_asset(filename: str):
+    """Serve static assets like icons"""
+    asset_path = project_root / "frontend" / "public" / "assets" / filename
+    if asset_path.exists():
+        return FileResponse(asset_path)
+    else:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
 @app.get("/mapframe")
 async def get_mapframe(end_date: str = None):
-    """Serve GovMap iframe with station data"""
+    """Serve GovMap iframe with station and wave forecast data"""
     logger.info(f"mapframe requested with end_date: {end_date}")
-    # Inject the end_date into the HTML
-    end_date_js = f"'{end_date}'" if end_date else "'2025-09-02'"
     
-    html_content = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>GOVMAP - Sea Level Stations</title>
-    <script src="https://www.govmap.gov.il/govmap/api/govmap.api.js"></script>
-    <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-        #map { width: 100%; height: 500px; }
-        .loading { 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 500px; 
-            background: #f0f0f0;
-            color: #333;
-        }
-        .error {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 500px;
-            background: #ffe6e6;
-            color: #d00;
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
-    <div id="loading" class="loading">
-        <div>Loading GovMap...</div>
-    </div>
-    <div id="map" style="display: none;"></div>
-    <div id="error" class="error" style="display: none;">
-        <div>
-            <h3>GovMap Unavailable</h3>
-            <p>Unable to load GovMap API or station data</p>
-        </div>
-    </div>
-    <script>
-        function showError(message) {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('map').style.display = 'none';
-            document.getElementById('error').style.display = 'flex';
-            console.error('GovMap Error:', message);
-        }
-        
-        function showMap() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').style.display = 'none';
-            document.getElementById('map').style.display = 'block';
-        }
-        
-        let mapInstance;
-        let stationsData = [];
-        
-        try {
-            govmap.createMap('map', {
-                token: '11aa3021-4ae0-4771-8ae0-df75e73fe73e'
-            });
-            
-            setTimeout(() => {
-                // Get end_date from injected variable
-                const endDate = """ + end_date_js + """;
-                console.log('MapFrame end_date:', endDate);
-                fetch(`/stations/map?end_date=${endDate}`)
-                .then(response => response.json())
-                .then(stations => {
-                    var data = {
-                        wkts: stations.map(s => `POINT(${s.x} ${s.y})`),
-                        names: stations.map(s => s.Station),
-                        geometryType: govmap.geometryType.POINT,
-                        defaultSymbol: {
-                            url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-                            width: 32,
-                            height: 32
-                        },
-                        clearExisting: true,
-                        data: {
-                            tooltips: stations.map(s => `${s.Station}: ${s.latest_value}m`),
-                            headers: stations.map(s => s.Station),
-                            bubbleHTML: '<div style="padding:10px; text-align:left; direction:ltr;"><strong>Station:</strong> {0}<br/><strong>Sea Level:</strong> {1} m<br/><strong>Last Update:</strong> {2}</div>',
-                            bubbleHTMLParameters: stations.map(s => [s.Station, s.latest_value, s.last_update])
-                        }
-                    };
-                    
-                    govmap.displayGeometries(data);
-                    showMap();
-                })
-                .catch(err => showError('Failed: ' + err.message));
-            }, 3000);
-        } catch (error) {
-            showError('Map init failed: ' + error.message);
-        }
-    </script>
-</body>
-</html>
-    """
-    return HTMLResponse(content=html_content)
+    # Read the HTML file and serve it
+    mapframe_path = current_dir / "mapframe.html"
+    if mapframe_path.exists():
+        with open(mapframe_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    else:
+        raise HTTPException(status_code=404, detail="Mapframe HTML not found")
 
 # Frontend management endpoints
 @app.post("/dev/frontend/start")
@@ -747,7 +669,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Sea Level Monitoring Development Server")
-    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    parser.add_argument("--host", default="sea-level-dash-local", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
     parser.add_argument("--auto-frontend", action="store_true", help="Auto-start frontend server")
