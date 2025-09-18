@@ -6,7 +6,10 @@ import * as XLSX from 'xlsx';
 import ErrorBoundary from './ErrorBoundary';
 import DateRangePicker from './DateRangePicker';
 import CustomDropdown from './CustomDropdown';
+import StatsCard from './StatsCard';
 import { useFavorites } from '../hooks/useFavorites';
+import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
+import { formatDateTime, isValidDate } from '../utils/dateUtils';
 import apiService from '../services/apiService';
 
 // Lazy load heavy components
@@ -16,6 +19,10 @@ const SeaForecastView = lazy(() => import('./SeaForecastView'));
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://sea-level-dash-local:8001';
 
 function Dashboard() {
+  const { measureOperation } = usePerformanceMonitor('Dashboard');
+  // Suppress unused variable warning
+  void measureOperation;
+  
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTab, setActiveTab] = useState('graph');
   const [mapTab, setMapTab] = useState('osm');
@@ -189,9 +196,115 @@ function Dashboard() {
     }
   }, [filters.predictionModels, filters.forecastHours]);
 
+  // Memoize filter values to prevent unnecessary re-renders
+  const filterValues = useMemo(() => ({
+    startDate: filters.startDate.getTime(),
+    endDate: filters.endDate.getTime(),
+    dataType: filters.dataType,
+    showAnomalies: filters.showAnomalies,
+    trendline: filters.trendline,
+    analysisType: filters.analysisType
+  }), [filters.startDate, filters.endDate, filters.dataType, filters.showAnomalies, filters.trendline, filters.analysisType]);
+
+  // Memoize selected stations array
+  const stableSelectedStations = useMemo(() => selectedStations, [selectedStations.join(',')]);
+
+
+
+  // Calculate analysis - memoized for performance
+  const calculateAnalysis = useCallback((data, analysisType) => {
+    if (!data || data.length === 0) return null;
+
+    const analyses = {
+      'rolling_avg_3h': { window: 3, name: '3-Hour Avg', color: 'violet' },
+      'rolling_avg_6h': { window: 6, name: '6-Hour Avg', color: 'cyan' },
+      'rolling_avg_24h': { window: 24, name: '24-Hour Avg', color: 'magenta' },
+      'all': null
+    };
+
+    if (analysisType === 'all') {
+      return Object.entries(analyses)
+        .filter(([key]) => key !== 'all')
+        .map(([key, config]) => calculateAnalysis(data, key))
+        .filter(Boolean);
+    }
+
+    const config = analyses[analysisType];
+    if (!config) return null;
+
+    const rollingAvg = [];
+    const windowSize = config.window;
+    
+    for (let i = 0; i < data.length; i++) {
+      const start = Math.max(0, i - windowSize + 1);
+      const window = data.slice(start, i + 1);
+      const validValues = window.map(d => d.Tab_Value_mDepthC1).filter(v => !isNaN(v));
+      const avg = validValues.length > 0 
+        ? validValues.reduce((sum, v) => sum + v, 0) / validValues.length 
+        : null;
+      rollingAvg.push(avg);
+    }
+    
+    return {
+      x: data.map(d => d.Tab_DateTime),
+      y: rollingAvg,
+      type: 'scatter',
+      mode: 'lines',
+      name: config.name,
+      line: { color: config.color, width: 2 }
+    };
+  }, []);
+
+  // Calculate trendline - memoized for performance
+  const calculateTrendline = useCallback((data, period) => {
+    if (!data || data.length < 2) return null;
+
+    const periodDays = {
+      '7d': 7,
+      '30d': 30,
+      '90d': 90,
+      '1y': 365,
+      'last_decade': 3650,
+      'last_two_decades': 7300,
+      'all': null
+    };
+
+    const days = periodDays[period];
+    let filteredData = data;
+
+    if (days !== null) {
+      const endDate = new Date(data[data.length - 1].Tab_DateTime);
+      const startDate = new Date(endDate - days * 24 * 60 * 60 * 1000);
+      filteredData = data.filter(d => new Date(d.Tab_DateTime) >= startDate);
+    }
+    
+    if (filteredData.length < 2) return null;
+
+    const n = filteredData.length;
+    const xValues = filteredData.map((_, i) => i);
+    const yValues = filteredData.map(d => d.Tab_Value_mDepthC1);
+    
+    const sumX = xValues.reduce((a, b) => a + b, 0);
+    const sumY = yValues.reduce((a, b) => a + b, 0);
+    const sumXY = xValues.reduce((sum, x, i) => sum + x * yValues[i], 0);
+    const sumXX = xValues.reduce((sum, x) => sum + x * x, 0);
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+    
+    return {
+      x: filteredData.map(d => d.Tab_DateTime),
+      y: xValues.map(x => slope * x + intercept),
+      type: 'scatter',
+      mode: 'lines',
+      name: `Trendline (${period})`,
+      line: { color: 'yellow', dash: 'dash', width: 2 }
+    };
+  }, []);
+
   // Stabilize fetchData with proper dependencies
   const fetchData = useCallback(async () => {
-    if (loading || stations.length === 0 || selectedStations.length === 0) return;
+    if (loading || stations.length === 0 || stableSelectedStations.length === 0) return;
     
     // Cancel previous request
     if (abortControllerRef.current) {
@@ -203,16 +316,16 @@ function Dashboard() {
     try {
       let allData = [];
 
-      if (selectedStations.includes('All Stations')) {
+      if (stableSelectedStations.includes('All Stations')) {
         const stationList = stations.filter(s => s !== 'All Stations');
         
         for (const station of stationList) {
           const params = {
             station: station,
-            start_date: filters.startDate.toISOString().split('T')[0],
-            end_date: filters.endDate.toISOString().split('T')[0],
-            data_source: filters.dataType,
-            show_anomalies: filters.showAnomalies.toString()
+            start_date: new Date(filterValues.startDate).toISOString().split('T')[0],
+            end_date: new Date(filterValues.endDate).toISOString().split('T')[0],
+            data_source: filterValues.dataType,
+            show_anomalies: filterValues.showAnomalies.toString()
           };
 
           try {
@@ -225,13 +338,13 @@ function Dashboard() {
           }
         }
       } else {
-        for (const station of selectedStations.filter(s => s !== 'All Stations').slice(0, 3)) {
+        for (const station of stableSelectedStations.filter(s => s !== 'All Stations').slice(0, 3)) {
           const params = {
             station: station,
-            start_date: filters.startDate.toISOString().split('T')[0],
-            end_date: filters.endDate.toISOString().split('T')[0],
-            data_source: filters.dataType,
-            show_anomalies: filters.showAnomalies.toString()
+            start_date: new Date(filterValues.startDate).toISOString().split('T')[0],
+            end_date: new Date(filterValues.endDate).toISOString().split('T')[0],
+            data_source: filterValues.dataType,
+            show_anomalies: filterValues.showAnomalies.toString()
           };
 
           try {
@@ -255,13 +368,13 @@ function Dashboard() {
         let trendlineValues = null;
         let analysisValues = null;
         
-        if (filters.trendline !== 'none' && optimizedData.length > 1) {
-          const trendlineData = calculateTrendline(optimizedData, filters.trendline);
+        if (filterValues.trendline !== 'none' && optimizedData.length > 1) {
+          const trendlineData = calculateTrendline(optimizedData, filterValues.trendline);
           trendlineValues = trendlineData?.y || [];
         }
         
-        if (filters.analysisType !== 'none' && optimizedData.length > 1) {
-          const analysisData = calculateAnalysis(optimizedData, filters.analysisType);
+        if (filterValues.analysisType !== 'none' && optimizedData.length > 1) {
+          const analysisData = calculateAnalysis(optimizedData, filterValues.analysisType);
           if (Array.isArray(analysisData)) {
             analysisValues = analysisData[0]?.y || [];
           } else {
@@ -300,15 +413,12 @@ function Dashboard() {
       setLoading(false);
     }
   }, [
-    // Remove predictions from dependencies
-    filters.startDate.getTime(), 
-    filters.endDate.getTime(), 
-    filters.dataType,
-    filters.showAnomalies,
-    filters.trendline,
-    filters.analysisType,
-    selectedStations,
-    stations.length // Use length instead of full array
+    filterValues,
+    stableSelectedStations,
+    stations.length,
+    calculateTrendline,
+    calculateAnalysis,
+    calculateStats
   ]);
 
   // Cleanup on unmount
@@ -317,10 +427,12 @@ function Dashboard() {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      // Cancel all API requests
+      apiService.cancelAllRequests();
     };
   }, []);
 
-  // Debounced data fetching
+  // Debounced data fetching with stable dependencies
   useEffect(() => {
     if (stations.length > 0 && selectedStations.length > 0) {
       const timeoutId = setTimeout(() => {
@@ -329,7 +441,7 @@ function Dashboard() {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [filters.startDate.getTime(), filters.endDate.getTime(), filters.dataType, filters.showAnomalies, selectedStations, stations.length]);
+  }, [fetchData]);
 
   // Separate effect for predictions - support multiple stations
   useEffect(() => {
@@ -379,97 +491,6 @@ function Dashboard() {
       handleFilterChange('predictionModels', [...currentModels, model]);
     }
   };
-
-  // Calculate trendline - memoized for performance
-  const calculateTrendline = useCallback((data, period) => {
-    if (!data || data.length < 2) return null;
-
-    const periodDays = {
-      '7d': 7,
-      '30d': 30,
-      '90d': 90,
-      '1y': 365,
-      'last_decade': 3650,
-      'last_two_decades': 7300,
-      'all': null
-    };
-
-    const days = periodDays[period];
-    let filteredData = data;
-
-    if (days !== null) {
-      const endDate = new Date(data[data.length - 1].Tab_DateTime);
-      const startDate = new Date(endDate - days * 24 * 60 * 60 * 1000);
-      filteredData = data.filter(d => new Date(d.Tab_DateTime) >= startDate);
-    }
-    
-    if (filteredData.length < 2) return null;
-
-    const n = filteredData.length;
-    const xValues = filteredData.map((_, i) => i);
-    const yValues = filteredData.map(d => d.Tab_Value_mDepthC1);
-    
-    const sumX = xValues.reduce((a, b) => a + b, 0);
-    const sumY = yValues.reduce((a, b) => a + b, 0);
-    const sumXY = xValues.reduce((sum, x, i) => sum + x * yValues[i], 0);
-    const sumXX = xValues.reduce((sum, x) => sum + x * x, 0);
-    
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-    
-    return {
-      x: filteredData.map(d => d.Tab_DateTime),
-      y: xValues.map(x => slope * x + intercept),
-      type: 'scatter',
-      mode: 'lines',
-      name: `Trendline (${period})`,
-      line: { color: 'yellow', dash: 'dash', width: 2 }
-    };
-  }, []);
-
-  // Calculate analysis - memoized for performance
-  const calculateAnalysis = useCallback((data, analysisType) => {
-    if (!data || data.length === 0) return null;
-
-    const analyses = {
-      'rolling_avg_3h': { window: 3, name: '3-Hour Avg', color: 'violet' },
-      'rolling_avg_6h': { window: 6, name: '6-Hour Avg', color: 'cyan' },
-      'rolling_avg_24h': { window: 24, name: '24-Hour Avg', color: 'magenta' },
-      'all': null
-    };
-
-    if (analysisType === 'all') {
-      return Object.entries(analyses)
-        .filter(([key]) => key !== 'all')
-        .map(([key, config]) => calculateAnalysis(data, key))
-        .filter(Boolean);
-    }
-
-    const config = analyses[analysisType];
-    if (!config) return null;
-
-    const rollingAvg = [];
-    const windowSize = config.window;
-    
-    for (let i = 0; i < data.length; i++) {
-      const start = Math.max(0, i - windowSize + 1);
-      const window = data.slice(start, i + 1);
-      const validValues = window.map(d => d.Tab_Value_mDepthC1).filter(v => !isNaN(v));
-      const avg = validValues.length > 0 
-        ? validValues.reduce((sum, v) => sum + v, 0) / validValues.length 
-        : null;
-      rollingAvg.push(avg);
-    }
-    
-    return {
-      x: data.map(d => d.Tab_DateTime),
-      y: rollingAvg,
-      type: 'scatter',
-      mode: 'lines',
-      name: config.name,
-      line: { color: config.color, width: 2 }
-    };
-  }, []);
 
   // Enhanced plot creation with Kalman support - memoized for performance
   const createPlot = useMemo(() => {
@@ -825,6 +846,7 @@ function Dashboard() {
       return (
         <div style={{ width: '100%', height: 'clamp(300px, 50vh, 500px)', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
           <iframe
+            key={`govmap-${filters.endDate.toISOString().split('T')[0]}`}
             src={`${API_BASE_URL}/mapframe?end_date=${filters.endDate.toISOString().split('T')[0]}`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="GovMap"
@@ -836,6 +858,7 @@ function Dashboard() {
     } else {
       return (
         <OSMMap 
+          key="osm-map"
           stations={stations.filter(s => s !== 'All Stations')}
           currentStation={selectedStations[0]}
           mapData={graphData}
@@ -1049,38 +1072,32 @@ function Dashboard() {
             {/* Stats Cards */}
             <Row className="mb-3">
               <Col md={3}>
-                <Card className="stat-card">
-                  <Card.Body className="text-center p-3">
-                    <div className="stat-label">Current Level</div>
-                    <div className="stat-value">{stats.current_level.toFixed(3)}m</div>
-                  </Card.Body>
-                </Card>
+                <StatsCard 
+                  title="Current Level" 
+                  value={stats.current_level.toFixed(3)} 
+                  suffix="m" 
+                />
               </Col>
               <Col md={3}>
-                <Card className={`stat-card ${stats['24h_change'] >= 0 ? 'green' : 'red'}`}>
-                  <Card.Body className="text-center p-3">
-                    <div className="stat-label">24h Change</div>
-                    <div className="stat-value">
-                      {stats['24h_change'] >= 0 ? '+' : ''}{stats['24h_change'].toFixed(3)}m
-                    </div>
-                  </Card.Body>
-                </Card>
+                <StatsCard 
+                  title="24h Change" 
+                  value={`${stats['24h_change'] >= 0 ? '+' : ''}${stats['24h_change'].toFixed(3)}`} 
+                  suffix="m" 
+                  color={stats['24h_change'] >= 0 ? 'green' : 'red'}
+                />
               </Col>
               <Col md={3}>
-                <Card className="stat-card">
-                  <Card.Body className="text-center p-3">
-                    <div className="stat-label">Avg. Temp</div>
-                    <div className="stat-value">{stats.avg_temp.toFixed(1)}°C</div>
-                  </Card.Body>
-                </Card>
+                <StatsCard 
+                  title="Avg. Temp" 
+                  value={stats.avg_temp.toFixed(1)} 
+                  suffix="°C" 
+                />
               </Col>
               <Col md={3}>
-                <Card className="stat-card">
-                  <Card.Body className="text-center p-3">
-                    <div className="stat-label">Anomalies</div>
-                    <div className="stat-value">{stats.anomalies}</div>
-                  </Card.Body>
-                </Card>
+                <StatsCard 
+                  title="Anomalies" 
+                  value={stats.anomalies} 
+                />
               </Col>
             </Row>
 
@@ -1162,7 +1179,7 @@ function Dashboard() {
                                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                                 .map((row, idx) => (
                                 <tr key={idx}>
-                                  <td>{filters.dataType === 'tides' ? row.Date : (row.Tab_DateTime && !isNaN(new Date(row.Tab_DateTime)) ? new Date(row.Tab_DateTime).toISOString().replace('T', ' ').replace('.000Z', '') : 'Invalid Date')}</td>
+                                  <td>{filters.dataType === 'tides' ? row.Date : formatDateTime(row.Tab_DateTime)}</td>
                                   <td>{row.Station}</td>
                                   {filters.dataType === 'tides' ? (
                                     <>

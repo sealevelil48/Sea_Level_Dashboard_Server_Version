@@ -1,225 +1,248 @@
 #!/usr/bin/env python3
 """
-Requirements Check Script
-Verifies all dependencies and system requirements
+Sea Level Monitoring System - Requirements Checker
+Validates system requirements and dependencies
 """
 
-import os
 import sys
 import subprocess
 import importlib
+import json
 from pathlib import Path
 
 def check_python_version():
-    """Check Python version"""
-    print("🐍 Python Version Check:")
+    """Check Python version."""
+    print("🐍 Checking Python version...")
     version = sys.version_info
-    print(f"   Current: {version.major}.{version.minor}.{version.micro}")
     
-    if version.major >= 3 and version.minor >= 8:
-        print("   ✅ Python version OK")
+    if version.major == 3 and version.minor >= 8:
+        print(f"✅ Python {version.major}.{version.minor}.{version.micro}")
         return True
     else:
-        print("   ❌ Python 3.8+ required")
+        print(f"❌ Python {version.major}.{version.minor}.{version.micro} (requires 3.8+)")
         return False
 
-def check_backend_requirements():
-    """Check backend Python requirements"""
-    print("\n📦 Backend Requirements Check:")
-    
-    requirements_file = Path(__file__).parent / "backend" / "requirements.txt"
-    
-    if not requirements_file.exists():
-        print(f"   ❌ requirements.txt not found: {requirements_file}")
-        return False
-    
-    # Read requirements
-    with open(requirements_file, 'r') as f:
-        requirements = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-    
-    missing = []
-    for req in requirements:
-        # Extract package name (before ==, >=, etc.)
-        package_name = req.split('==')[0].split('>=')[0].split('<=')[0].strip()
-        
-        try:
-            # Handle special cases
-            if package_name == 'psycopg2-binary':
-                importlib.import_module('psycopg2')
-            elif package_name == 'python-dotenv':
-                importlib.import_module('dotenv')
-            else:
-                importlib.import_module(package_name)
-            print(f"   ✅ {package_name}")
-        except ImportError:
-            missing.append(req)
-            print(f"   ❌ {package_name}")
-    
-    if missing:
-        print(f"\n   ⚠️  Missing packages:")
-        for pkg in missing:
-            print(f"      - {pkg}")
-        print(f"\n   💡 Install with: pip install {' '.join(missing)}")
-        return False
-    
-    return True
-
-def check_frontend_requirements():
-    """Check frontend Node.js requirements"""
-    print("\n🌐 Frontend Requirements Check:")
-    
-    # Check Node.js
+def check_node_version():
+    """Check Node.js version."""
+    print("📦 Checking Node.js version...")
     try:
-        result = subprocess.run(['node', '--version'], 
-                              capture_output=True, text=True, timeout=5)
+        result = subprocess.run(["node", "--version"], capture_output=True, text=True)
         if result.returncode == 0:
             version = result.stdout.strip()
-            print(f"   ✅ Node.js: {version}")
-            
-            # Check if version is adequate (v16+)
             version_num = int(version.replace('v', '').split('.')[0])
-            if version_num < 16:
-                print(f"   ⚠️  Node.js 16+ recommended (current: {version})")
-        else:
-            print("   ❌ Node.js not found")
-            return False
-    except Exception as e:
-        print(f"   ❌ Node.js check failed: {e}")
-        return False
-    
-    # Check npm
-    try:
-        result = subprocess.run(['npm', '--version'], 
-                              capture_output=True, text=True, timeout=5, shell=True)
-        if result.returncode == 0:
-            print(f"   ✅ npm: {result.stdout.strip()}")
-        else:
-            print("   ❌ npm not found")
-            return False
-    except Exception as e:
-        print(f"   ❌ npm check failed: {e}")
-        return False
-    
-    # Check package.json
-    frontend_dir = Path(__file__).parent / "frontend"
-    package_json = frontend_dir / "package.json"
-    
-    if package_json.exists():
-        print(f"   ✅ package.json found")
-        
-        # Check if node_modules exists
-        node_modules = frontend_dir / "node_modules"
-        if node_modules.exists():
-            print(f"   ✅ node_modules installed")
-        else:
-            print(f"   ⚠️  node_modules not found - run 'npm install' in frontend/")
-    else:
-        print(f"   ❌ package.json not found: {package_json}")
-        return False
-    
-    return True
-
-def check_database_connection():
-    """Check database connectivity"""
-    print("\n🗄️  Database Connection Check:")
-    
-    env_file = Path(__file__).parent / "backend" / ".env"
-    if not env_file.exists():
-        print(f"   ❌ .env file not found: {env_file}")
-        print("   💡 Create .env file with DB_URI setting")
-        return False
-    
-    # Load environment
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(env_file)
-        
-        db_uri = os.getenv('DB_URI')
-        if db_uri:
-            print(f"   ✅ DB_URI configured")
-            
-            # Try to connect
-            try:
-                from sqlalchemy import create_engine, text
-                engine = create_engine(db_uri)
-                with engine.connect() as conn:
-                    conn.execute(text("SELECT 1"))
-                print(f"   ✅ Database connection successful")
+            if version_num >= 16:
+                print(f"✅ Node.js {version}")
                 return True
-            except Exception as e:
-                print(f"   ❌ Database connection failed: {e}")
-                print(f"   💡 Check if PostgreSQL is running and credentials are correct")
+            else:
+                print(f"❌ Node.js {version} (requires 16+)")
                 return False
         else:
-            print(f"   ❌ DB_URI not found in .env")
+            print("❌ Node.js not found")
             return False
-            
-    except Exception as e:
-        print(f"   ❌ Environment check failed: {e}")
+    except FileNotFoundError:
+        print("❌ Node.js not found")
         return False
 
-def check_ports():
-    """Check if required ports are available"""
-    print("\n🔌 Port Availability Check:")
+def check_npm_version():
+    """Check npm version."""
+    print("📦 Checking npm version...")
+    try:
+        result = subprocess.run(["npm", "--version"], capture_output=True, text=True)
+        if result.returncode == 0:
+            version = result.stdout.strip()
+            print(f"✅ npm {version}")
+            return True
+        else:
+            print("❌ npm not found")
+            return False
+    except FileNotFoundError:
+        print("❌ npm not found")
+        return False
+
+def check_python_packages():
+    """Check Python package requirements."""
+    print("🔍 Checking Python packages...")
     
-    import socket
-    
-    ports_to_check = [
-        (8000, "Backend API"),
-        (3000, "Frontend Dev Server"),
-        (5432, "PostgreSQL Database")
+    required_packages = [
+        'fastapi',
+        'uvicorn',
+        'sqlalchemy',
+        'pandas',
+        'numpy',
+        'requests',
+        'python-dotenv'
     ]
     
-    for port, description in ports_to_check:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex(('localhost', port))
-        sock.close()
+    missing_packages = []
+    
+    for package in required_packages:
+        try:
+            importlib.import_module(package.replace('-', '_'))
+            print(f"✅ {package}")
+        except ImportError:
+            print(f"❌ {package} (missing)")
+            missing_packages.append(package)
+    
+    return len(missing_packages) == 0, missing_packages
+
+def check_frontend_dependencies():
+    """Check frontend dependencies."""
+    print("🔍 Checking frontend dependencies...")
+    
+    frontend_dir = Path("frontend")
+    package_json = frontend_dir / "package.json"
+    node_modules = frontend_dir / "node_modules"
+    
+    if not package_json.exists():
+        print("❌ Frontend package.json not found")
+        return False
+    
+    if not node_modules.exists():
+        print("❌ Frontend node_modules not found (run npm install)")
+        return False
+    
+    try:
+        with open(package_json, 'r') as f:
+            package_data = json.load(f)
         
-        if result == 0:
-            print(f"   ⚠️  Port {port} ({description}) is in use")
+        dependencies = package_data.get('dependencies', {})
+        required_deps = ['react', 'react-dom', 'bootstrap', 'plotly.js', 'axios']
+        
+        missing_deps = []
+        for dep in required_deps:
+            if dep in dependencies:
+                print(f"✅ {dep}")
+            else:
+                print(f"❌ {dep} (missing)")
+                missing_deps.append(dep)
+        
+        return len(missing_deps) == 0
+    
+    except Exception as e:
+        print(f"❌ Error checking frontend dependencies: {e}")
+        return False
+
+def check_database_connection():
+    """Check database connection (optional)."""
+    print("🗄️ Checking database connection...")
+    
+    try:
+        import psycopg2
+        print("✅ PostgreSQL driver available")
+        
+        # Try to read connection string from .env
+        env_file = Path("backend/.env")
+        if env_file.exists():
+            with open(env_file, 'r') as f:
+                content = f.read()
+                if 'DB_URI=' in content:
+                    print("✅ Database configuration found")
+                else:
+                    print("⚠️ Database configuration not found in .env")
         else:
-            print(f"   ✅ Port {port} ({description}) is available")
+            print("⚠️ Backend .env file not found")
+        
+        return True
+    
+    except ImportError:
+        print("❌ PostgreSQL driver not installed (psycopg2)")
+        return False
+
+def check_project_structure():
+    """Check project structure."""
+    print("📁 Checking project structure...")
+    
+    required_dirs = [
+        "backend",
+        "frontend",
+        "backend/lambdas",
+        "backend/shared",
+        "frontend/src",
+        "frontend/public"
+    ]
+    
+    required_files = [
+        "backend/local_server.py",
+        "backend/requirements.txt",
+        "frontend/package.json",
+        "frontend/src/App.js"
+    ]
+    
+    all_good = True
+    
+    for dir_path in required_dirs:
+        if Path(dir_path).exists():
+            print(f"✅ {dir_path}/")
+        else:
+            print(f"❌ {dir_path}/ (missing)")
+            all_good = False
+    
+    for file_path in required_files:
+        if Path(file_path).exists():
+            print(f"✅ {file_path}")
+        else:
+            print(f"❌ {file_path} (missing)")
+            all_good = False
+    
+    return all_good
 
 def main():
-    """Main check function"""
-    print("🌊 Sea Level Dashboard - Requirements Check")
+    """Main requirements check function."""
+    print("🌊 Sea Level Monitoring System - Requirements Check")
     print("=" * 60)
     
-    checks = [
-        ("Python Version", check_python_version),
-        ("Backend Requirements", check_backend_requirements),
-        ("Frontend Requirements", check_frontend_requirements),
-        ("Database Connection", check_database_connection),
-        ("Port Availability", check_ports)
-    ]
+    checks = []
     
-    results = []
-    for name, check_func in checks:
-        try:
-            result = check_func()
-            results.append((name, result))
-        except Exception as e:
-            print(f"   ❌ {name} check failed: {e}")
-            results.append((name, False))
+    # System requirements
+    checks.append(("Python Version", check_python_version()))
+    checks.append(("Node.js Version", check_node_version()))
+    checks.append(("npm Version", check_npm_version()))
     
-    print("\n" + "=" * 60)
-    print("📋 Summary:")
+    # Project structure
+    checks.append(("Project Structure", check_project_structure()))
     
-    all_passed = True
-    for name, passed in results:
-        status = "✅ PASS" if passed else "❌ FAIL"
-        print(f"   {status} - {name}")
-        if not passed:
-            all_passed = False
+    # Python packages
+    python_packages_ok, missing_packages = check_python_packages()
+    checks.append(("Python Packages", python_packages_ok))
+    
+    # Frontend dependencies
+    checks.append(("Frontend Dependencies", check_frontend_dependencies()))
+    
+    # Database (optional)
+    checks.append(("Database Setup", check_database_connection()))
     
     print("\n" + "=" * 60)
-    if all_passed:
-        print("🎉 All checks passed! You're ready to run the application.")
-        print("💡 Run: python start_dev.py")
+    print("📋 SUMMARY")
+    print("=" * 60)
+    
+    passed = 0
+    total = len(checks)
+    
+    for check_name, result in checks:
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{check_name:<25} {status}")
+        if result:
+            passed += 1
+    
+    print(f"\nResult: {passed}/{total} checks passed")
+    
+    if passed == total:
+        print("\n🎉 All requirements satisfied! You can run the application.")
+        print("\nNext steps:")
+        print("1. Run: python start_dev.py")
+        print("2. Open: http://localhost:3000")
     else:
-        print("⚠️  Some checks failed. Please fix the issues above.")
-        print("💡 Install missing dependencies and check configuration.")
+        print("\n⚠️ Some requirements are missing.")
+        
+        if not python_packages_ok and missing_packages:
+            print(f"\nInstall missing Python packages:")
+            print(f"pip install {' '.join(missing_packages)}")
+        
+        print("\nRun setup_project.py to fix common issues:")
+        print("python setup_project.py")
+    
+    return passed == total
 
 if __name__ == "__main__":
-    main()
+    success = main()
+    sys.exit(0 if success else 1)

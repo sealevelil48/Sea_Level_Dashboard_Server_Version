@@ -1,29 +1,145 @@
+/**
+ * API Service with proper error handling and request management
+ */
+
+class ApiError extends Error {
+  constructor(status, statusText, data = null) {
+    super(`HTTP ${status}: ${statusText}`);
+    this.status = status;
+    this.statusText = statusText;
+    this.data = data;
+    this.name = 'ApiError';
+  }
+}
+
 class ApiService {
-  constructor(baseUrl) {
-    this.baseUrl = baseUrl || process.env.REACT_APP_API_URL;
+  constructor(baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000') {
+    this.baseURL = baseURL;
+    this.timeout = 30000;
+    this.activeRequests = new Map();
   }
 
-  async fetchWithRetry(url, retries = 3) {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.json();
-      } catch (error) {
-        if (i === retries - 1) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+  async request(endpoint, options = {}) {
+    const requestId = `${options.method || 'GET'}_${endpoint}`;
+    
+    // Cancel previous request if exists
+    if (this.activeRequests.has(requestId)) {
+      this.activeRequests.get(requestId).abort();
+    }
+
+    const controller = new AbortController();
+    this.activeRequests.set(requestId, controller);
+    
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+
+      clearTimeout(timeoutId);
+      this.activeRequests.delete(requestId);
+
+      if (!response.ok) {
+        let errorData = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Ignore JSON parsing errors for error responses
+        }
+        throw new ApiError(response.status, response.statusText, errorData);
       }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      this.activeRequests.delete(requestId);
+      
+      if (error.name === 'AbortError') {
+        throw new Error('Request cancelled');
+      }
+      
+      throw error;
     }
   }
 
   async getStations() {
-    return this.fetchWithRetry(`${this.baseUrl}/stations`);
+    try {
+      const data = await this.request('/stations');
+      return {
+        stations: Array.isArray(data.stations) ? data.stations : [],
+        database_available: data.database_available || false
+      };
+    } catch (error) {
+      console.error('Error fetching stations:', error);
+      return { stations: [], database_available: false };
+    }
   }
 
   async getData(params) {
-    const queryString = new URLSearchParams(params).toString();
-    return this.fetchWithRetry(`${this.baseUrl}/data?${queryString}`);
+    try {
+      const queryParams = new URLSearchParams();
+      
+      // Validate and add parameters
+      if (params.station) queryParams.append('station', params.station);
+      if (params.start_date) queryParams.append('start_date', params.start_date);
+      if (params.end_date) queryParams.append('end_date', params.end_date);
+      if (params.data_source) queryParams.append('data_source', params.data_source);
+      if (params.show_anomalies) queryParams.append('show_anomalies', params.show_anomalies);
+      if (params.limit) queryParams.append('limit', params.limit);
+
+      const data = await this.request(`/data?${queryParams}`);
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      return [];
+    }
+  }
+
+  async getPredictions(params) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params.stations) queryParams.append('stations', params.stations);
+      if (params.model) queryParams.append('model', params.model);
+      if (params.steps) queryParams.append('steps', params.steps);
+
+      return await this.request(`/predictions?${queryParams}`);
+    } catch (error) {
+      console.error('Error fetching predictions:', error);
+      return {};
+    }
+  }
+
+  async getSeaForecast() {
+    try {
+      return await this.request('/sea-forecast');
+    } catch (error) {
+      console.error('Error fetching sea forecast:', error);
+      return null;
+    }
+  }
+
+  async getHealth() {
+    try {
+      return await this.request('/health');
+    } catch (error) {
+      console.error('Error checking health:', error);
+      return { status: 'error', message: error.message };
+    }
+  }
+
+  // Cancel all active requests
+  cancelAllRequests() {
+    this.activeRequests.forEach(controller => controller.abort());
+    this.activeRequests.clear();
   }
 }
 
-export default new ApiService();
+const apiService = new ApiService();
+export default apiService;
