@@ -69,7 +69,7 @@
                 };
                 
                 const displayAllMarkers = () => {
-                    if (stationsData.length === 0 && forecastData.length === 0) return;
+                    if (stationsData.length === 0) return;
                     
                     const wkts = [];
                     const names = [];
@@ -77,7 +77,15 @@
                     const tooltips = [];
                     const bubbleHTMLParameters = [];
                     
-                    // Add stations
+                    // Station to forecast mapping
+                    const stationForecastMap = {
+                        'Acre': 'Northern Coast',
+                        'Yafo': 'Central Coast', 
+                        'Ashkelon': 'Southern Coast',
+                        'Eilat': 'Gulf of Eilat'
+                    };
+                    
+                    // Add stations with combined data
                     stationsData.forEach((station) => {
                         wkts.push(`POINT(${station.x} ${station.y})`);
                         names.push(`station_${station.Station}`);
@@ -86,40 +94,59 @@
                             width: 32,
                             height: 32
                         });
-                        tooltips.push(`${station.Station} - ${station.latest_value}m`);
-                        bubbleHTMLParameters.push([
-                            station.Station,
-                            `<strong>Sea Level:</strong> ${station.latest_value} m`,
-                            `<strong>Last Update:</strong> ${station.last_update}`,
-                            `<strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`,
-                            '',
-                            `<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`
-                        ]);
+                        
+                        // Find matching forecast data
+                        const forecastLocation = stationForecastMap[station.Station];
+                        const matchingForecast = forecastData.find(f => f.name_eng === forecastLocation);
+                        
+                        if (matchingForecast) {
+                            const currentForecast = matchingForecast.forecasts[0];
+                            tooltips.push(`${station.Station} - Combined Data`);
+                            bubbleHTMLParameters.push([
+                                forecastLocation,
+                                `<strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}`,
+                                `<strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C`,
+                                `<strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}`,
+                                `<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div><div style="font-size: 11px; color: #888; margin-top: 5px;"><a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div><hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;"><h4 style="margin: 0 0 10px 0; color: #2c3e50;">${station.Station}</h4><div><strong>Sea Level:</strong> ${station.latest_value} m</div><div style="margin-top: 5px;"><strong>Last Update:</strong> ${station.last_update}</div><div style="margin-top: 5px;"><strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}</div>`,
+                                `<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`
+                            ]);
+                        } else {
+                            tooltips.push(`${station.Station} - ${station.latest_value}m`);
+                            bubbleHTMLParameters.push([
+                                station.Station,
+                                `<strong>Sea Level:</strong> ${station.latest_value} m`,
+                                `<strong>Last Update:</strong> ${station.last_update}`,
+                                `<strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`,
+                                '',
+                                `<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`
+                            ]);
+                        }
                     });
                     
-                    // Add forecasts
-                    forecastData.forEach((location) => {
-                        const coords = location.coordinates;
+                    // Add Sea of Galilee forecast marker (standalone)
+                    const seaOfGalilee = forecastData.find(f => f.name_eng === 'Sea of Galilee');
+                    if (seaOfGalilee) {
+                        const coords = seaOfGalilee.coordinates;
                         const itm = convertToITM(coords.lng, coords.lat);
                         wkts.push(`POINT(${itm.x} ${itm.y})`);
-                        names.push(`forecast_${location.name_eng}`);
+                        names.push(`forecast_sea_of_galilee`);
                         symbols.push({
-                            url: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#FF9800"/></svg>'),
+                            url: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#2196F3"/></svg>'),
                             width: 32,
                             height: 32
                         });
                         
-                        const currentForecast = location.forecasts[0];
-                        tooltips.push(`${location.name_eng} - Wave Forecast`);
+                        const currentForecast = seaOfGalilee.forecasts[0];
+                        tooltips.push(`${seaOfGalilee.name_eng} - Wave Forecast`);
                         bubbleHTMLParameters.push([
-                            location.name_eng,
+                            seaOfGalilee.name_eng,
                             `<strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}`,
                             `<strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C`,
                             `<strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}`,
                             `<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div>`,
                             `<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div>`
                         ]);
-                    });
+                    }
                     
                     govmap.displayGeometries({
                         wkts: wkts,
@@ -130,13 +157,13 @@
                         data: {
                             tooltips: tooltips,
                             bubbleHTML: `
-                                <div style="font-family: Arial, sans-serif; padding: 15px; min-width: 250px;">
-                                    <h4 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;">{0}</h4>
-                                    <div style="margin: 8px 0;">{1}</div>
-                                    <div style="margin: 8px 0;">{2}</div>
-                                    <div style="margin: 8px 0;">{3}</div>
-                                    {4}
-                                    {5}
+                                <div style="font-family: Arial, sans-serif; padding: 15px; min-width: 250px; direction: ltr; text-align: left;">
+                                    <h4 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; direction: ltr; text-align: left;">{0}</h4>
+                                    <div style="margin: 8px 0; direction: ltr; text-align: left;">{1}</div>
+                                    <div style="margin: 8px 0; direction: ltr; text-align: left;">{2}</div>
+                                    <div style="margin: 8px 0; direction: ltr; text-align: left;">{3}</div>
+                                    <div style="direction: ltr; text-align: left;">{4}</div>
+                                    <div style="direction: ltr; text-align: left;">{5}</div>
                                 </div>
                             `,
                             bubbleHTMLParameters: bubbleHTMLParameters
