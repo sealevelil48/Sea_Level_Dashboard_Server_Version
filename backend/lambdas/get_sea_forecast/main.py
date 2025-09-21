@@ -246,11 +246,20 @@ def map_location_name(original_name):
     return name_mapping.get(original_name, original_name)
 
 def get_location_coordinates(location_name):
-    coordinates = {
+    # Validate input to prevent injection
+    if not isinstance(location_name, str) or len(location_name) > 100:
+        return {"lat": 32.0, "lng": 34.8}
+    
+    # Whitelist allowed location names
+    allowed_locations = {
         "Southern Coast": {"lat": 31.462314, "lng": 34.348573},
         "Central Coast": {"lat": 32.061196, "lng": 34.752568},
         "Northern Coast": {"lat": 32.904018, "lng": 35.069794},
         "Sea of Galilee": {"lat": 32.8, "lng": 35.6},
         "Gulf of Eilat": {"lat": 29.537478, "lng": 34.952816}
     }
-    return coordinates.get(location_name, {"lat": 32.0, "lng": 34.8})
+    
+    # Only return coordinates for whitelisted locations
+    if location_name in allowed_locations:
+        return allowed_locations[location_name]
+    return {"lat": 32.0, "lng": 34.8}

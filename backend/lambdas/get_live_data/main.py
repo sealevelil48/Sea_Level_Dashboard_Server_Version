@@ -92,9 +92,9 @@ def handler(event, context):
                 "error": str(e)
             }]
             return {
-                "statusCode": 200,
+                "statusCode": 503,
                 "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
-                "body": json.dumps({"station": station or 'all', "data": demo_data})
+                "body": json.dumps({"station": station or 'all', "data": demo_data, "error": "Database error"})
             }
 
     except Exception as e:

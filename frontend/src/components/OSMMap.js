@@ -191,6 +191,77 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
     return () => clearTimeout(timer);
   }, [forecastData]);
 
+  // Fetch station map data for OpenStreetMap
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    
+    const fetchStationMapData = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const response = await fetch(`http://sea-level-dash-local:8001/stations/map?end_date=${today}`);
+        const stationMapData = await response.json();
+        
+        if (Array.isArray(stationMapData) && stationMapData.length > 0) {
+          // Update markers with fetched data
+          updateMarkersWithData(stationMapData);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch station map data for OSM:', error);
+      }
+    };
+    
+    fetchStationMapData();
+  }, [mapInstanceRef.current]);
+
+  // Function to update markers with station data
+  const updateMarkersWithData = (stationMapData) => {
+    Object.entries(markersRef.current).forEach(([station, marker]) => {
+      if (!marker || station.startsWith('forecast_')) return;
+      
+      const stationData = stationMapData.find(d => d.Station === station);
+      const forecastLocation = getForecastForStation(station);
+      
+      let popupContent = '<div style="font-family: Arial, sans-serif; min-width: 200px;">';
+      
+      // Add sea level data first
+      if (stationData) {
+        popupContent += `
+            <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
+            <p><strong>Sea Level:</strong> ${stationData.latest_value} m</p>
+            <p><strong>Temperature:</strong> ${stationData.temperature || 'N/A'}°C</p>
+            <p><strong>Last Update:</strong> ${stationData.last_update}</p>
+            <p style="font-size: 11px; color: #888;">
+            <a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a>
+          </p>
+        `;
+      } else {
+        popupContent += `
+            <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
+            <p>Loading sea level data...</p>
+        `;
+      }
+      
+      // Add forecast data after sea level if available for combined stations
+      if (forecastLocation && stationToForecastMapping[station]) {
+        const currentForecast = forecastLocation.forecasts[0];
+        popupContent += `
+            <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+            <h4 style="margin: 0 0 10px 0; color: #ff8c00;">${forecastLocation.name_eng}</h4>
+            <p><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</p>
+            <p><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
+            <p><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</p>
+            <p><strong>Forecast Period:</strong><br/>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</p>
+            <p style="font-size: 11px; color: #888;">
+              <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
+            </p>
+        `;
+      }
+      
+      popupContent += '</div>';
+      marker.bindPopup(popupContent);
+    });
+  };
+
   // Update marker popups when data changes
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -230,8 +301,8 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
           popupContent += `
               <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
               <p><strong>Sea Level:</strong> ${latestData.Tab_Value_mDepthC1?.toFixed(3) || 'N/A'} m</p>
+              <p><strong>Temperature:</strong> ${latestData.Tab_Value_monT2m?.toFixed(1) || 'N/A'}°C</p>
               <p><strong>Last Update:</strong> ${latestData.Tab_DateTime ? new Date(latestData.Tab_DateTime).toISOString().replace('T', ' ').replace('.000Z', '') : 'N/A'}</p>
-              <p><strong>Coordinates:</strong> ${stationCoordinates[station]?.[0]?.toFixed(4) || 'N/A'}, ${stationCoordinates[station]?.[1]?.toFixed(4) || 'N/A'}</p>
               <p style="font-size: 11px; color: #888;">
               <a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a>
             </p>

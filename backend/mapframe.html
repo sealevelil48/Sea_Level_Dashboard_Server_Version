@@ -103,22 +103,16 @@
                             const currentForecast = matchingForecast.forecasts[0];
                             tooltips.push(`${station.Station} - Combined Data`);
                             bubbleHTMLParameters.push([
-                                forecastLocation,
-                                `<strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}`,
-                                `<strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C`,
-                                `<strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}`,
-                                `<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div><div style="font-size: 11px; color: #888; margin-top: 5px;"><a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div><hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;"><h4 style="margin: 0 0 10px 0; color: #2c3e50;">${station.Station}</h4><div><strong>Sea Level:</strong> ${station.latest_value} m</div><div style="margin-top: 5px;"><strong>Last Update:</strong> ${station.last_update}</div><div style="margin-top: 5px;"><strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}</div>`,
-                                `<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`
+                                station.Station,
+                                `<strong>Sea Level:</strong> ${station.latest_value} m`,
+                                `<strong>Temperature:</strong> ${station.temperature || 'N/A'}°C<div style="margin-top: 5px;"><strong>Last Update:</strong> ${station.last_update}</div><div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" onclick="window.open(this.href); return false;" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div><hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;"><h4 style="margin: 0 0 10px 0; color: #ff8c00;">${forecastLocation}</h4><div><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</div><div><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</div><div><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</div><div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div><div style="font-size: 11px; color: #888; margin-top: 5px;"><a href="https://ims.gov.il/he/coasts" target="_blank" onclick="window.open(this.href); return false;" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div>`
                             ]);
                         } else {
                             tooltips.push(`${station.Station} - ${station.latest_value}m`);
                             bubbleHTMLParameters.push([
                                 station.Station,
                                 `<strong>Sea Level:</strong> ${station.latest_value} m`,
-                                `<strong>Last Update:</strong> ${station.last_update}`,
-                                `<strong>Coordinates:</strong> ${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`,
-                                '',
-                                `<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`
+                                `<strong>Temperature:</strong> ${station.temperature || 'N/A'}°C<div style="margin-top: 5px;"><strong>Last Update:</strong> ${station.last_update}</div><div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_blank" onclick="window.open(this.href); return false;" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`
                             ]);
                         }
                     });
@@ -142,9 +136,7 @@
                             seaOfGalilee.name_eng,
                             `<strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}`,
                             `<strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C`,
-                            `<strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}`,
-                            `<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div>`,
-                            `<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div>`
+                            `<strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div><div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://ims.gov.il/he/coasts" target="_blank" onclick="window.open(this.href); return false;" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div>`
                         ]);
                     }
                     
@@ -162,8 +154,6 @@
                                     <div style="margin: 8px 0; direction: ltr; text-align: left;">{1}</div>
                                     <div style="margin: 8px 0; direction: ltr; text-align: left;">{2}</div>
                                     <div style="margin: 8px 0; direction: ltr; text-align: left;">{3}</div>
-                                    <div style="direction: ltr; text-align: left;">{4}</div>
-                                    <div style="direction: ltr; text-align: left;">{5}</div>
                                 </div>
                             `,
                             bubbleHTMLParameters: bubbleHTMLParameters
@@ -203,7 +193,8 @@
                     }
                 });
                 
-                fetchAndDisplayStations('2025-09-02');
+                const today = new Date().toISOString().split('T')[0];
+                fetchAndDisplayStations(today);
                 fetchWaveForecast();
                 
                 mapInstance = govmap.createMap("map", {

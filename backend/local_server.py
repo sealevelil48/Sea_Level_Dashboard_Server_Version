@@ -366,12 +366,12 @@ def stop_frontend_server():
             frontend_process.terminate()
             frontend_process.wait(timeout=10)
             logger.info("🛑 React development server stopped")
-        except Exception as e:
+        except (subprocess.TimeoutExpired, OSError) as e:
             logger.error(f"Error stopping frontend server: {e}")
             try:
                 frontend_process.kill()
-            except:
-                pass
+            except (OSError, AttributeError):
+                logger.warning("Could not kill frontend process")
         finally:
             frontend_process = None
 
@@ -542,7 +542,8 @@ async def get_predictions(
         response = get_predictions_handler(event, None)
         return lambda_response_to_fastapi(response)
     except Exception as e:
-        logger.error(f"Error in get_predictions: {e}")
+        from security import secure_log
+        secure_log(logger, 'error', 'Error in get_predictions', error=str(e))
         return {"error": str(e), "arima": None, "kalman": None, "ensemble": None}
 
 @app.get("/stations/map")
@@ -605,7 +606,8 @@ async def get_asset(filename: str):
 @app.get("/mapframe")
 async def get_mapframe(end_date: str = None):
     """Serve GovMap iframe with station and wave forecast data"""
-    logger.info(f"mapframe requested with end_date: {end_date}")
+    from security import secure_log
+    secure_log(logger, 'info', 'mapframe requested', end_date=end_date or 'None')
     
     # Read the HTML file and serve it
     mapframe_path = current_dir / "mapframe.html"
@@ -620,6 +622,7 @@ async def get_mapframe(end_date: str = None):
 @app.post("/dev/frontend/start")
 async def start_frontend_api():
     """Development endpoint to start frontend server"""
+    # Remove client-side authorization check for development endpoint
     if not check_frontend_dependencies():
         raise HTTPException(status_code=503, detail="Frontend dependencies not available")
     

@@ -38,8 +38,10 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
     Optimized data loading with proper error handling and caching
     """
     try:
-        # Generate cache key for this query
-        cache_key = f"query:{hash(str([start_date, end_date, station, data_source]))}"
+        # Generate deterministic cache key to prevent collisions
+        import hashlib
+        cache_params = f"{start_date}_{end_date}_{station}_{data_source}"
+        cache_key = f"query:{hashlib.md5(cache_params.encode()).hexdigest()}"
         
         # Try cache first
         cached_data = db_manager.get_from_cache(cache_key)
@@ -260,7 +262,10 @@ def prophet_predict(station: str) -> Optional[pd.DataFrame]:
             logger.warning(f"Not enough data points ({len(prophet_df)}) for Prophet prediction")
             return pd.DataFrame()
 
-        # Fit model and predict
+        # Fit model with chunked data to prevent memory issues
+        if len(prophet_df) > 10000:
+            prophet_df = prophet_df.tail(10000)  # Use last 10k points
+        
         model = Prophet(yearly_seasonality=True, daily_seasonality=True, growth='linear')
         model.fit(prophet_df)
         
@@ -335,12 +340,21 @@ def calculate_stats(df: pd.DataFrame) -> Dict[str, Any]:
         if 'Tab_Value_mDepthC1' in df.columns and not df['Tab_Value_mDepthC1'].empty:
             stats['current_level'] = float(df['Tab_Value_mDepthC1'].iloc[-1])
 
-        # 24h change
-        if 'Tab_Value_mDepthC1' in df.columns and len(df) > 1:
-            now_val = df['Tab_Value_mDepthC1'].iloc[-1]
-            yesterday_val = df['Tab_Value_mDepthC1'].iloc[0]
-            if pd.notna(now_val) and pd.notna(yesterday_val):
-                stats['24h_change'] = float(now_val - yesterday_val)
+        # 24h change - find values approximately 24 hours apart
+        if 'Tab_Value_mDepthC1' in df.columns and 'Tab_DateTime' in df.columns and len(df) > 1:
+            df_sorted = df.sort_values('Tab_DateTime')
+            latest_time = pd.to_datetime(df_sorted['Tab_DateTime'].iloc[-1])
+            target_time = latest_time - pd.Timedelta(hours=24)
+            
+            # Find closest value to 24h ago
+            time_diffs = abs(pd.to_datetime(df_sorted['Tab_DateTime']) - target_time)
+            closest_idx = time_diffs.idxmin()
+            
+            now_val = df_sorted['Tab_Value_mDepthC1'].iloc[-1]
+            past_val = df_sorted.loc[closest_idx, 'Tab_Value_mDepthC1']
+            
+            if pd.notna(now_val) and pd.notna(past_val):
+                stats['24h_change'] = float(now_val - past_val)
 
         # Average temperature
         if 'Tab_Value_monT2m' in df.columns:

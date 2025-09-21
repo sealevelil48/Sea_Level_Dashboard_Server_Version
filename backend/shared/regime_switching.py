@@ -340,20 +340,44 @@ class RegimeSwitchingKalman:
         }
     
     def save_model(self, filepath: str):
-        """Save trained model to file"""
-        with open(filepath, 'wb') as f:
-            pickle.dump({
-                'hmm_model': self.hmm_model,
-                'regime_configs': self.regime_configs,
-                'regime_history': self.regime_history
-            }, f)
-        logger.info(f"Model saved to {filepath}")
+        """Save trained model to file with path validation"""
+        import os
+        from pathlib import Path
+        
+        # Validate and sanitize filepath
+        safe_path = Path(filepath).resolve()
+        if not str(safe_path).startswith(os.getcwd()):
+            raise ValueError("Invalid file path - outside working directory")
+        
+        try:
+            with open(safe_path, 'wb') as f:
+                pickle.dump({
+                    'hmm_model': self.hmm_model,
+                    'regime_configs': self.regime_configs,
+                    'regime_history': self.regime_history
+                }, f)
+            logger.info(f"Model saved to {safe_path}")
+        except (OSError, IOError, PermissionError) as e:
+            logger.error(f"Failed to save model: {e}")
+            raise
     
     def load_model(self, filepath: str):
-        """Load trained model from file"""
-        with open(filepath, 'rb') as f:
-            data = pickle.load(f)
-            self.hmm_model = data['hmm_model']
-            self.regime_configs = data['regime_configs']
-            self.regime_history = data.get('regime_history', [])
-        logger.info(f"Model loaded from {filepath}")
+        """Load trained model from file with path validation"""
+        import os
+        from pathlib import Path
+        
+        # Validate and sanitize filepath
+        safe_path = Path(filepath).resolve()
+        if not str(safe_path).startswith(os.getcwd()):
+            raise ValueError("Invalid file path - outside working directory")
+        
+        try:
+            with open(safe_path, 'rb') as f:
+                data = pickle.load(f)
+                self.hmm_model = data['hmm_model']
+                self.regime_configs = data['regime_configs']
+                self.regime_history = data.get('regime_history', [])
+            logger.info(f"Model loaded from {safe_path}")
+        except (FileNotFoundError, PermissionError, pickle.PickleError) as e:
+            logger.error(f"Failed to load model: {e}")
+            raise

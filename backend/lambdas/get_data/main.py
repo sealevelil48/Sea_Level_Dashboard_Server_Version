@@ -148,9 +148,11 @@ def detect_anomalies(df):
             lower_bound = Q1 - 1.5 * IQR
             upper_bound = Q3 + 1.5 * IQR
             
-            # Mark anomalies
-            df['anomaly'] = df['Tab_Value_mDepthC1'].apply(
-                lambda x: -1 if pd.notna(x) and (x < lower_bound or x > upper_bound) else 0
+            # Mark anomalies using vectorized operations
+            df['anomaly'] = np.where(
+                (df['Tab_Value_mDepthC1'].notna()) & 
+                ((df['Tab_Value_mDepthC1'] < lower_bound) | (df['Tab_Value_mDepthC1'] > upper_bound)), 
+                -1, 0
             )
             
             logger.info(f"Detected {sum(df['anomaly'] == -1)} anomalies")

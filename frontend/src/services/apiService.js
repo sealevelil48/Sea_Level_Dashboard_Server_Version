@@ -17,10 +17,49 @@ class ApiService {
     this.baseURL = baseURL;
     this.timeout = 30000;
     this.activeRequests = new Map();
+    this.cache = new Map();
+    this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+    this.retryAttempts = 3;
+    this.retryDelay = 1000;
+  }
+
+  // Cache management
+  getCacheKey(endpoint, params = {}) {
+    return `${endpoint}_${JSON.stringify(params)}`;
+  }
+
+  getFromCache(key) {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+      return cached.data;
+    }
+    this.cache.delete(key);
+    return null;
+  }
+
+  setCache(key, data) {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+    // Cleanup old cache entries
+    if (this.cache.size > 100) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
   }
 
   async request(endpoint, options = {}) {
     const requestId = `${options.method || 'GET'}_${endpoint}`;
+    
+    // Check cache for GET requests
+    if (!options.method || options.method === 'GET') {
+      const cacheKey = this.getCacheKey(endpoint, options.params);
+      const cachedData = this.getFromCache(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+    }
     
     // Cancel previous request if exists
     if (this.activeRequests.has(requestId)) {
@@ -30,42 +69,66 @@ class ApiService {
     const controller = new AbortController();
     this.activeRequests.set(requestId, controller);
     
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    let lastError;
+    for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
+      try {
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+        
+        const response = await fetch(`${this.baseURL}${endpoint}`, {
+          ...options,
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+          }
+        });
 
-    try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          let errorData = null;
+          try {
+            errorData = await response.json();
+          } catch {
+            // Ignore JSON parsing errors for error responses
+          }
+          throw new ApiError(response.status, response.statusText, errorData);
         }
-      });
 
-      clearTimeout(timeoutId);
-      this.activeRequests.delete(requestId);
-
-      if (!response.ok) {
-        let errorData = null;
-        try {
-          errorData = await response.json();
-        } catch {
-          // Ignore JSON parsing errors for error responses
+        const data = await response.json();
+        
+        // Cache successful GET requests
+        if (!options.method || options.method === 'GET') {
+          const cacheKey = this.getCacheKey(endpoint, options.params);
+          this.setCache(cacheKey, data);
         }
-        throw new ApiError(response.status, response.statusText, errorData);
+        
+        this.activeRequests.delete(requestId);
+        return data;
+        
+      } catch (error) {
+        lastError = error;
+        
+        if (error.name === 'AbortError') {
+          this.activeRequests.delete(requestId);
+          throw new Error('Request cancelled');
+        }
+        
+        // Don't retry on client errors (4xx)
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          this.activeRequests.delete(requestId);
+          throw error;
+        }
+        
+        // Wait before retry
+        if (attempt < this.retryAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, this.retryDelay * (attempt + 1)));
+        }
       }
-
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      this.activeRequests.delete(requestId);
-      
-      if (error.name === 'AbortError') {
-        throw new Error('Request cancelled');
-      }
-      
-      throw error;
     }
+    
+    this.activeRequests.delete(requestId);
+    throw lastError;
   }
 
   async getStations() {
@@ -138,6 +201,11 @@ class ApiService {
   cancelAllRequests() {
     this.activeRequests.forEach(controller => controller.abort());
     this.activeRequests.clear();
+  }
+
+  // Clear cache
+  clearCache() {
+    this.cache.clear();
   }
 }
 
