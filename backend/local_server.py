@@ -34,9 +34,9 @@ frontend_root = project_root / "frontend"
 env_file = backend_root / ".env"
 if env_file.exists():
     load_dotenv(env_file)
-    print(f"✅ Loaded environment from {env_file}")
+    print(f"[OK] Loaded environment from {env_file}")
 else:
-    print(f"⚠️ No .env file found at {env_file}")
+    print(f"[WARN] No .env file found at {env_file}")
 
 # Configure logging with UTF-8 encoding for Windows compatibility
 log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -63,9 +63,9 @@ sys.path.append(str(backend_root))
 # Import your application modules with error handling
 try:
     from shared.database import db_manager
-    logger.info("✅ Database manager imported successfully")
+    logger.info("[OK] Database manager imported successfully")
 except ImportError as e:
-    logger.error(f"❌ Failed to import database manager: {e}")
+    logger.error(f"[ERROR] Failed to import database manager: {e}")
     db_manager = None
     
 try:
@@ -74,9 +74,9 @@ try:
     from lambdas.get_live_data.main import lambda_handler as get_live_data_handler
     from lambdas.get_predictions.main import lambda_handler as get_predictions_handler
     from lambdas.get_sea_forecast.main import lambda_handler as get_sea_forecast_handler
-    logger.info("✅ Lambda handlers imported successfully")
+    logger.info("[OK] Lambda handlers imported successfully")
 except ImportError as e:
-    logger.error(f"❌ Failed to import Lambda handlers: {e}")
+    logger.error(f"[ERROR] Failed to import Lambda handlers: {e}")
     logger.error("Make sure all lambda folders exist with main.py files")
     # Create dummy handlers
     def dummy_handler(event, context=None):
@@ -97,7 +97,7 @@ frontend_process: Optional[subprocess.Popen] = None
 async def lifespan(app: FastAPI):
     """Manage application lifecycle"""
     logger.info("=" * 60)
-    logger.info("🚀 Starting Sea Level Dashboard Server...")
+    logger.info("[START] Starting Sea Level Dashboard Server...")
     logger.info(f"Platform: {sys.platform}")
     logger.info(f"Python: {sys.version}")
     logger.info("=" * 60)
@@ -119,9 +119,9 @@ async def lifespan(app: FastAPI):
     # Attach the globally-imported db_manager to the app state
     if db_manager:
         app.state.db_manager = db_manager
-        logger.info("✅ Database connection established via module import")
+        logger.info("[OK] Database connection established via module import")
     else:
-        logger.warning("⚠️ Database manager not available, running in demo mode")
+        logger.warning("[WARN] Database manager not available, running in demo mode")
     
     # Check if frontend needs to be started
     if os.getenv("AUTO_START_FRONTEND", "false").lower() == "true":
@@ -130,13 +130,13 @@ async def lifespan(app: FastAPI):
     yield
     
     # Cleanup
-    logger.info("🛑 Shutting down server...")
+    logger.info("[STOP] Shutting down server...")
     
     # Stop frontend if running
     stop_frontend_dev_server()
     
     # No need to explicitly close engine here as SQLAlchemy handles pooling
-    logger.info("✅ Server shutdown complete")
+    logger.info("[OK] Server shutdown complete")
 
 # Create FastAPI app
 app = FastAPI(
@@ -194,12 +194,12 @@ def check_node_npm_windows():
                 shell=False
             )
             if result.returncode == 0:
-                logger.info(f"✅ Node.js found: {result.stdout.strip()}")
+                logger.info(f"[OK] Node.js found: {result.stdout.strip()}")
                 return True
         except:
             continue
     
-    logger.warning("⚠️ Node.js not found. Frontend auto-start disabled.")
+    logger.warning("[WARN] Node.js not found. Frontend auto-start disabled.")
     logger.info("   Install from: https://nodejs.org/")
     return False
 
@@ -212,11 +212,11 @@ def start_frontend_dev_server():
     
     frontend_path = frontend_root
     if not frontend_path.exists():
-        logger.warning(f"⚠️ Frontend directory not found: {frontend_path}")
+        logger.warning(f"[WARN] Frontend directory not found: {frontend_path}")
         return
     
     try:
-        logger.info("🎨 Starting frontend development server...")
+        logger.info("[START] Starting frontend development server...")
         
         # Use npm.cmd on Windows
         npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
@@ -235,10 +235,10 @@ def start_frontend_dev_server():
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         )
         
-        logger.info("✅ Frontend development server started")
+        logger.info("[OK] Frontend development server started")
         
     except Exception as e:
-        logger.error(f"❌ Failed to start frontend: {e}")
+        logger.error(f"[ERROR] Failed to start frontend: {e}")
 
 def stop_frontend_dev_server():
     """Stop frontend development server"""
@@ -257,7 +257,7 @@ def stop_frontend_dev_server():
                 frontend_process.terminate()
                 frontend_process.wait(timeout=5)
             
-            logger.info("✅ Frontend server stopped")
+            logger.info("[OK] Frontend server stopped")
         except:
             pass
         finally:
@@ -415,21 +415,66 @@ async def get_sea_forecast():
         )
 
 @app.get("/api/stations/map")
-async def get_stations_map():
-    """Get stations with coordinates for map display"""
+async def get_api_stations_map(end_date: Optional[str] = None):
+    """Get stations with coordinates for map display - API endpoint"""
     stations_data = [
-        {"Station": "Acre", "x": 35.0818, "y": 32.9279, "status": "active"},
-        {"Station": "Yafo", "x": 34.7505, "y": 32.0542, "status": "active"},
-        {"Station": "Ashkelon", "x": 34.5668, "y": 31.6688, "status": "active"},
-        {"Station": "Eilat", "x": 34.9497, "y": 29.5577, "status": "active"}
+        {"Station": "Acre", "x": 35.0818, "y": 32.9279, "latest_value": "0.123", "temperature": "22.5", "last_update": "2025-10-22 10:00:00"},
+        {"Station": "Yafo", "x": 34.7505, "y": 32.0542, "latest_value": "0.098", "temperature": "23.1", "last_update": "2025-10-22 10:00:00"},
+        {"Station": "Ashkelon", "x": 34.5668, "y": 31.6688, "latest_value": "0.087", "temperature": "23.8", "last_update": "2025-10-22 10:00:00"},
+        {"Station": "Eilat", "x": 34.9497, "y": 29.5577, "latest_value": "0.156", "temperature": "25.2", "last_update": "2025-10-22 10:00:00"}
     ]
     return stations_data
+
+@app.get("/stations/map")
+async def get_stations_map(end_date: Optional[str] = None):
+    """Get stations with coordinates for map display"""
+    try:
+        from lambdas.get_station_map.main import lambda_handler as get_station_map_handler
+        
+        event = {
+            "httpMethod": "GET",
+            "path": "/stations/map",
+            "queryStringParameters": {"end_date": end_date} if end_date else {}
+        }
+        response = get_station_map_handler(event, None)
+        return lambda_to_fastapi_response(response)
+    except Exception as e:
+        logger.error(f"Error in get_stations_map: {e}")
+        stations_data = [
+            {"Station": "Acre", "x": 35.0818, "y": 32.9279, "latest_value": "0.123", "temperature": "22.5", "last_update": "2025-10-22 10:00:00"},
+            {"Station": "Yafo", "x": 34.7505, "y": 32.0542, "latest_value": "0.098", "temperature": "23.1", "last_update": "2025-10-22 10:00:00"},
+            {"Station": "Ashkelon", "x": 34.5668, "y": 31.6688, "latest_value": "0.087", "temperature": "23.8", "last_update": "2025-10-22 10:00:00"},
+            {"Station": "Eilat", "x": 34.9497, "y": 29.5577, "latest_value": "0.156", "temperature": "25.2", "last_update": "2025-10-22 10:00:00"}
+        ]
+        return stations_data
+
+@app.get("/sea-forecast")
+async def get_sea_forecast_direct():
+    """Get sea conditions forecast - direct endpoint for maps"""
+    try:
+        event = {"httpMethod": "GET", "path": "/sea-forecast", "queryStringParameters": {}}
+        response = get_sea_forecast_handler(event, None)
+        return lambda_to_fastapi_response(response)
+    except Exception as e:
+        logger.error(f"Error in get_sea_forecast_direct: {e}")
+        return JSONResponse(
+            content={"error": str(e), "locations": []},
+            status_code=500
+        )
+
+@app.get("/mapframe")
+async def serve_mapframe(end_date: Optional[str] = None):
+    """Serve the GovMap iframe"""
+    mapframe_path = backend_root / "mapframe.html"
+    if mapframe_path.exists():
+        return FileResponse(str(mapframe_path), media_type="text/html")
+    return JSONResponse(content={"error": "Mapframe not found"}, status_code=404)
 
 # --- Static File Serving ---
 # This section must come AFTER all API routes are defined.
 frontend_build = frontend_root / "build"
 if frontend_build.exists():
-    logger.info(f"📁 Serving frontend from {frontend_build}")
+    logger.info(f"[INFO] Serving frontend from {frontend_build}")
 
     # Mount the 'static' folder from the build directory, if it exists
     static_dir = frontend_build / "static"
@@ -450,7 +495,7 @@ if frontend_build.exists():
                 return FileResponse(str(index_html_path))
             return JSONResponse(content={"message": "Frontend not built."}, status_code=404)
     else:
-        logger.warning(f"⚠️ Frontend 'static' directory not found at {static_dir}. UI will not be served.")
+        logger.warning(f"[WARN] Frontend 'static' directory not found at {static_dir}. UI will not be served.")
         @app.get("/", include_in_schema=False)
         async def root_fallback():
             return JSONResponse(content={"message": "Backend is running, but the frontend is not built."})
@@ -458,7 +503,7 @@ if frontend_build.exists():
 # Windows-compatible signal handling
 def signal_handler(signum, frame):
     """Handle shutdown signals"""
-    logger.info(f"\n⚠️ Received signal {signum}, shutting down gracefully...")
+    logger.info(f"\n[SIGNAL] Received signal {signum}, shutting down gracefully...")
     stop_frontend_dev_server()
     sys.exit(0)
 
@@ -479,7 +524,7 @@ if __name__ == "__main__":
     env = os.getenv("ENV", "production")
     
     print("\n" + "=" * 60)
-    print("🌊 SEA LEVEL DASHBOARD SERVER")
+    print("SEA LEVEL DASHBOARD SERVER")
     print("=" * 60)
     print(f"Platform: {sys.platform}")
     print(f"Environment: {env}")

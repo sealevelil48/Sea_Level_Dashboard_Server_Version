@@ -177,7 +177,8 @@
                 };
                 
                 const fetchAndDisplayStations = (endDate) => {
-                    fetch(`/stations/map?end_date=${endDate}`)
+                    const apiUrl = window.location.protocol + '//' + window.location.host;
+                    fetch(`${apiUrl}/stations/map?end_date=${endDate}`)
                         .then(response => response.json())
                         .then(data => {
                             if (!Array.isArray(data) || data.length === 0) {
@@ -191,7 +192,8 @@
                 };
                 
                 const fetchWaveForecast = () => {
-                    fetch('/sea-forecast')
+                    const apiUrl = window.location.protocol + '//' + window.location.host;
+                    fetch(`${apiUrl}/sea-forecast`)
                         .then(response => response.json())
                         .then(data => {
                             if (data && data.locations) {

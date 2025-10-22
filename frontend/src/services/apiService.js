@@ -13,7 +13,7 @@ class ApiError extends Error {
 }
 
 class ApiService {
-  constructor(baseURL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886') {
+  constructor(baseURL = process.env.REACT_APP_API_URL || process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:30886') {
     this.baseURL = baseURL;
     this.timeout = 30000;
     this.activeRequests = new Map();
