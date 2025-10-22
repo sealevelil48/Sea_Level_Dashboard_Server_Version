@@ -1,15 +1,9 @@
 @echo off
-echo Starting Sea Level Dashboard Frontend with GovMap support...
+echo Starting Sea Level Dashboard Frontend...
 echo.
-
-REM Check domain configuration
-findstr "sea-level-dash-local" C:\Windows\System32\drivers\etc\hosts >nul
-if %errorLevel% neq 0 (
-    echo ERROR: Domain not configured!
-    echo Please run setup_govmap_domain.bat as Administrator first
-    pause
-    exit /b 1
-)
+echo This will start the frontend that connects to backend at http://127.0.0.1:30886
+echo Frontend will be available at http://localhost:3000
+echo.
 
 cd frontend
 echo Installing dependencies if needed...
@@ -18,6 +12,7 @@ call npm install
 echo Installing cross-env for Windows compatibility...
 call npm install cross-env
 
-echo Starting frontend on sea-level-dash-local:3000...
-call npm run start-govmap
+echo Starting frontend...
+set REACT_APP_API_URL=http://127.0.0.1:30886
+call npm start
 pause

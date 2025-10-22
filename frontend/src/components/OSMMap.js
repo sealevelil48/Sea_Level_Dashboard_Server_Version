@@ -198,7 +198,7 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
     const fetchStationMapData = async () => {
       try {
         const today = new Date().toISOString().split('T')[0];
-        const response = await fetch(`http://sea-level-dash-local:8001/stations/map?end_date=${today}`);
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886'}/api/stations/map?end_date=${today}`);
         const stationMapData = await response.json();
         
         if (Array.isArray(stationMapData) && stationMapData.length > 0) {

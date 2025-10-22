@@ -10,8 +10,9 @@ const SeaForecastView = ({ apiBaseUrl }) => {
     try {
       setLoading(true);
       setError(null);
-  console.log('Fetching forecast from:', `${apiBaseUrl}/api/sea-forecast`);
-  const response = await fetch(`${apiBaseUrl}/api/sea-forecast`);
+  const apiUrl = apiBaseUrl || process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886';
+  console.log('Fetching forecast from:', `${apiUrl}/api/sea-forecast`);
+  const response = await fetch(`${apiUrl}/api/sea-forecast`);
       if (response.ok) {
         const data = await response.json();
         console.log('Forecast data received:', data);

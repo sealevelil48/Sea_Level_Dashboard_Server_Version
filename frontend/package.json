@@ -23,8 +23,9 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "start-govmap": "cross-env HOST=sea-level-dash-local PORT=3000 REACT_APP_API_URL=http://sea-level-dash-local:8001 DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
+    "start": "cross-env REACT_APP_API_URL=http://127.0.0.1:30886 HOST=0.0.0.0 PORT=30887 DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
+    "start-govmap": "cross-env HOST=0.0.0.0 PORT=3000 REACT_APP_API_URL=http://5.102.231.16:30886 DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
+    "start-external": "cross-env REACT_APP_API_URL=http://5.102.231.16:30886 HOST=0.0.0.0 PORT=30887 DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
@@ -51,7 +52,6 @@
   },
   "overrides": {
     "postcss": "^8.4.31",
-    "serialize-javascript": "^6.0.2",
-    "webpack-dev-server": "^5.2.1"
+    "serialize-javascript": "^6.0.2"
   }
 }
