@@ -62,8 +62,8 @@ The Sea Level Monitoring System provides real-time monitoring and analysis of se
 
 1. **Clone the repository**
 ```bash
-git clone <repository-url>
-cd Sea_Level_Dashboard_AWS_Ver_07_09_25-main
+git clone https://github.com/sealevelil48/Sea_Level_Dashboard_Server_Version.git
+cd Sea_Level_Dashboard_Server_Version
 ```
 
 2. **Backend Setup**
@@ -137,7 +137,7 @@ curl http://localhost:30886/api/sea-forecast
 
 ### Project Structure
 ```
-Sea_Level_Dashboard_AWS_Ver_07_09_25-main/
+Sea_Level_Dashboard_Server_Version/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
