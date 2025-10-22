@@ -11,7 +11,7 @@ sys.path.insert(0, backend_dir)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def handler(event, context):
+def lambda_handler(event, context):
     """Lambda handler for get_yesterday_data"""
     try:
         # Demo response - replace with actual implementation

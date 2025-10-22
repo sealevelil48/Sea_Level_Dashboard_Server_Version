@@ -13,7 +13,7 @@ class ApiError extends Error {
 }
 
 class ApiService {
-  constructor(baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000') {
+  constructor(baseURL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886') {
     this.baseURL = baseURL;
     this.timeout = 30000;
     this.activeRequests = new Map();
@@ -133,7 +133,7 @@ class ApiService {
 
   async getStations() {
     try {
-      const data = await this.request('/stations');
+      const data = await this.request('/api/stations');
       return {
         stations: Array.isArray(data.stations) ? data.stations : [],
         database_available: data.database_available || false
@@ -156,7 +156,7 @@ class ApiService {
       if (params.show_anomalies) queryParams.append('show_anomalies', params.show_anomalies);
       if (params.limit) queryParams.append('limit', params.limit);
 
-      const data = await this.request(`/data?${queryParams}`);
+      const data = await this.request(`/api/data?${queryParams}`);
       return Array.isArray(data) ? data : [];
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -172,7 +172,7 @@ class ApiService {
       if (params.model) queryParams.append('model', params.model);
       if (params.steps) queryParams.append('steps', params.steps);
 
-      return await this.request(`/predictions?${queryParams}`);
+      return await this.request(`/api/predictions?${queryParams}`);
     } catch (error) {
       console.error('Error fetching predictions:', error);
       return {};
@@ -181,7 +181,7 @@ class ApiService {
 
   async getSeaForecast() {
     try {
-      return await this.request('/sea-forecast');
+      return await this.request('/api/sea-forecast');
     } catch (error) {
       console.error('Error fetching sea forecast:', error);
       return null;
@@ -190,7 +190,7 @@ class ApiService {
 
   async getHealth() {
     try {
-      return await this.request('/health');
+      return await this.request('/api/health');
     } catch (error) {
       console.error('Error checking health:', error);
       return { status: 'error', message: error.message };

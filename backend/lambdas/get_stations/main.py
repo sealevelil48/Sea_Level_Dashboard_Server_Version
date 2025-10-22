@@ -50,7 +50,7 @@ def get_all_stations_from_db():
         logger.error(f"Database error: {e}")
         return ['All Stations', f'Error: {str(e)[:30]}']
 
-def handler(event, context):
+def lambda_handler(event, context):
     """Lambda handler for get_stations"""
     try:
         stations = get_all_stations_from_db()
