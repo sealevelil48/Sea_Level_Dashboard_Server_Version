@@ -847,7 +847,7 @@ function Dashboard() {
         <div style={{ width: '100%', height: 'clamp(300px, 50vh, 500px)', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
           <iframe
             key={`govmap-${filters.endDate.toISOString().split('T')[0]}`}
-            src={`http://5.102.231.16:30886/mapframe?end_date=${filters.endDate.toISOString().split('T')[0]}`}
+            src={`${API_BASE_URL}/mapframe?end_date=${filters.endDate.toISOString().split('T')[0]}`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="GovMap"
             allow="geolocation; accelerometer; clipboard-write"
