@@ -2,7 +2,28 @@
 <html>
 <head>
     <title>GOVMAP - Sea Level Stations</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://www.govmap.gov.il/govmap/api/govmap.api.js"></script>
+    <script>
+        // Edge compatibility polyfill
+        if (!window.fetch) {
+            window.fetch = function(url, options) {
+                return new Promise(function(resolve, reject) {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open(options && options.method || 'GET', url);
+                    xhr.onload = function() {
+                        resolve({
+                            ok: xhr.status >= 200 && xhr.status < 300,
+                            json: function() { return Promise.resolve(JSON.parse(xhr.responseText)); }
+                        });
+                    };
+                    xhr.onerror = reject;
+                    xhr.send(options && options.body);
+                });
+            };
+        }
+    </script>
     <style>
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
         #map { width: 100%; height: 500px; }
@@ -55,10 +76,12 @@
         let forecastData = [];
         
         window.onload = function() {
-            try {
-                if (typeof govmap === 'undefined') {
-                    throw new Error('GovMap API not loaded');
-                }
+            // Add delay for Edge browser
+            setTimeout(function() {
+                try {
+                    if (typeof govmap === 'undefined') {
+                        throw new Error('GovMap API not loaded');
+                    }
                 
                 govmap.token = "11aa3021-4ae0-4771-8ae0-df75e73fe73e";
                 
@@ -225,6 +248,7 @@
             } catch (error) {
                 showError('Init failed: ' + error.message);
             }
+            }, 1000); // 1 second delay for Edge
         };
         
         window.addEventListener('message', function(event) {
