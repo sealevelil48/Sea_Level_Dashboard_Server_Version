@@ -485,6 +485,10 @@ if frontend_build.exists():
         # It's important this comes after the API routes.
         @app.get("/{full_path:path}", response_class=FileResponse, include_in_schema=False)
         async def serve_react_app(full_path: str):
+            # Explicitly exclude mapframe from catch-all
+            if full_path.startswith('mapframe'):
+                return await serve_mapframe()
+            
             file_path = frontend_build / full_path
             # If the requested path points to a file in the build directory (like assets), serve it directly.
             if file_path.is_file():
