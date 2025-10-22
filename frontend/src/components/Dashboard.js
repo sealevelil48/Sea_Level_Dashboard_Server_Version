@@ -16,7 +16,7 @@ import apiService from '../services/apiService';
 const OSMMap = lazy(() => import('./OSMMap'));
 const SeaForecastView = lazy(() => import('./SeaForecastView'));
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://sea-level-dash-local:8001';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886';
 
 function Dashboard() {
   const { measureOperation } = usePerformanceMonitor('Dashboard');

@@ -162,7 +162,7 @@ def detect_anomalies(df):
         
     return df
 
-def handler(event, context):
+def lambda_handler(event, context):
     """Lambda handler for get_data with proper data cleaning"""
     try:
         # Parse parameters

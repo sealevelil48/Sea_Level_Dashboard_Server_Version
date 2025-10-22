@@ -10,8 +10,8 @@ const SeaForecastView = ({ apiBaseUrl }) => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching forecast from:', `${apiBaseUrl}/sea-forecast`);
-      const response = await fetch(`${apiBaseUrl}/sea-forecast`);
+  console.log('Fetching forecast from:', `${apiBaseUrl}/api/sea-forecast`);
+  const response = await fetch(`${apiBaseUrl}/api/sea-forecast`);
       if (response.ok) {
         const data = await response.json();
         console.log('Forecast data received:', data);

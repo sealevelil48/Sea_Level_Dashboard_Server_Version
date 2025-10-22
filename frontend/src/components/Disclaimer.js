@@ -1,5 +1,5 @@
 import React from 'react';
-import './Disclaimer.css';
+// import './Disclaimer.css'; // Removed the import of the external CSS file that was causing the 'Could not resolve' error.
 
 const Disclaimer = () => {
   return (
@@ -11,12 +11,14 @@ const Disclaimer = () => {
 
       <div className="disclaimer-content">
         <div className="disclaimer-warning-box">
+          {/* FIX: Removed irregular whitespace character (Line 18:47) */}
           <strong>⚠️ IMPORTANT:</strong> Please read this disclaimer carefully before using the Sea Level Dashboard application. Your use of this application constitutes acceptance of these terms.
         </div>
         
         <div className="disclaimer-section">
           <h2>1. General Information & Purpose</h2>
-          <p>The Sea Level Dashboard application (the "App") provides sea level measurements, wave forecasts, and related oceanographic data for informational and educational purposes only. The information presented should not be considered as professional advice or a substitute for official reports, government advisories, or expert consultation.</p>
+          {/* FIX 1: Replaced unescaped quotes around "App" with &quot; */}
+          <p>The Sea Level Dashboard application (the &quot;App&quot;) provides sea level measurements, wave forecasts, and related oceanographic data for informational and educational purposes only. The information presented should not be considered as professional advice or a substitute for official reports, government advisories, or expert consultation.</p>
           <p>This App is intended for general awareness and research purposes. Users requiring precise, real-time data for critical decision-making should consult official maritime authorities and professional services.</p>
         </div>
         
@@ -65,7 +67,8 @@ const Disclaimer = () => {
           <h2>5. Limitation of Liability</h2>
           <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW:</p>
           <ul>
-            <li>The App is provided "AS IS" and "AS AVAILABLE" without warranties of any kind</li>
+            {/* FIX 2: Replaced unescaped quotes around "AS IS" and "AS AVAILABLE" with &quot; (This resolves the remaining 4 errors) */}
+            <li>The App is provided &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; without warranties of any kind</li>
             <li>We disclaim all warranties, express or implied, including but not limited to merchantability, fitness for a particular purpose, and non-infringement</li>
             <li>In no event shall the developers, operators, or data providers be liable for any direct, indirect, incidental, special, consequential, or punitive damages</li>
             <li>This includes, without limitation, damages for loss of profits, data, use, goodwill, or other intangible losses</li>

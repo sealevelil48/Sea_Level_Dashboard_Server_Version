@@ -104,7 +104,7 @@ def get_latest_station_data(end_date=None):
             {"Station": "Yafo", "name": "Yafo", "x": 176505, "y": 662250, "longitude": 34.74964, "latitude": 32.052552, "latest_value": 0.467, "last_update": current_time}
         ]
 
-def handler(event, context):
+def lambda_handler(event, context):
     """Lambda handler for get_station_map with real-time data"""
     try:
         # Parse end_date parameter

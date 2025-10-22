@@ -84,8 +84,8 @@ npm start
 
 4. **Access the Application**
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
+- Backend API: http://localhost:30886
+- API Documentation: http://localhost:30886/docs
 
 ## 💻 Usage
 
@@ -124,13 +124,13 @@ npm start
 ### Example Usage
 ```bash
 # Get stations
-curl http://localhost:8000/stations
+curl http://localhost:30886/api/stations
 
 # Get data for specific station
-curl "http://localhost:8000/data?station=Haifa&start_date=2024-01-01&end_date=2024-01-31"
+curl "http://localhost:30886/api/data?station=Haifa&start_date=2024-01-01&end_date=2024-01-31"
 
 # Get wave forecast
-curl http://localhost:8000/sea-forecast
+curl http://localhost:30886/api/sea-forecast
 ```
 
 ## 🛠️ Development

@@ -20,7 +20,7 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def handler(event, context):
+def lambda_handler(event, context):
     """Lambda handler for get_live_data"""
     try:
         path_params = event.get('pathParameters') or {}

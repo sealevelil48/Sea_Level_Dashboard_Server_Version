@@ -327,7 +327,7 @@ def ensemble_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
     return ensemble_result
 
 
-def handler(event, context):
+def lambda_handler(event, context):
     """Lambda handler for predictions - supports multiple stations"""
     try:
         # Parse parameters

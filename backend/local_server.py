@@ -1,741 +1,507 @@
-# backend/local_server.py
+#!/usr/bin/env python
 """
-Local Development Server for Sea Level Monitoring System
-Windows-compatible version with better error handling
+Local/Production Server for Sea Level Dashboard - Windows Server 2019
+Configured for port 30886 with proper CORS and network settings
+Works on Windows, Linux, and Mac
 """
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-import json
-import pandas as pd
-from datetime import datetime, timedelta
-import logging
 import os
 import sys
-import threading
+import json
+import logging
 import subprocess
+import signal
 import time
-import webbrowser
-import shutil
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
+from contextlib import asynccontextmanager
 
-# Add shared modules to path
-current_dir = Path(__file__).parent
-project_root = current_dir.parent
-sys.path.insert(0, str(current_dir))
-sys.path.insert(0, str(current_dir / "shared"))
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, FileResponse
+from dotenv import load_dotenv
 
-# Import Lambda handlers with better error handling
-LAMBDA_HANDLERS_AVAILABLE = False
-lambda_import_errors = []
+# Setup paths
+backend_root = Path(__file__).resolve().parent
+project_root = backend_root.parent
+frontend_root = project_root / "frontend"
 
-try:
-    # Import individual handlers
-    sys.path.insert(0, str(current_dir / "lambdas" / "get_stations"))
-    from lambdas.get_stations.main import handler as get_stations_handler
-    
-    sys.path.insert(0, str(current_dir / "lambdas" / "get_data"))
-    from lambdas.get_data.main import handler as get_data_handler
-    
-    sys.path.insert(0, str(current_dir / "lambdas" / "get_live_data"))
-    from lambdas.get_live_data.main import handler as get_live_data_handler
-    
-    sys.path.insert(0, str(current_dir / "lambdas" / "get_yesterday_data"))
-    from lambdas.get_yesterday_data.main import handler as get_yesterday_data_handler
-    
-    sys.path.insert(0, str(current_dir / "lambdas" / "get_predictions"))
-    from lambdas.get_predictions.main import handler as get_predictions_handler
-    
-    sys.path.insert(0, str(current_dir / "lambdas" / "get_station_map"))
-    from lambdas.get_station_map.main import handler as get_station_map_handler
-    
-    sys.path.insert(0, str(current_dir / "lambdas" / "get_sea_forecast"))
-    from lambdas.get_sea_forecast.main import lambda_handler as get_sea_forecast_handler
-    
-    LAMBDA_HANDLERS_AVAILABLE = True
-    print("✅ Lambda handlers loaded successfully")
-    
-except ImportError as e:
-    lambda_import_errors.append(str(e))
-    print(f"⚠️  Warning: Lambda handlers not available: {e}")
+# Load environment variables
+env_file = backend_root / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
+    print(f"✅ Loaded environment from {env_file}")
+else:
+    print(f"⚠️ No .env file found at {env_file}")
 
-# Configure logging
+# Configure logging with UTF-8 encoding for Windows compatibility
+log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Create a stream handler with UTF-8 encoding
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setFormatter(logging.Formatter(log_format))
+stream_handler.setLevel(logging.INFO)
+stream_handler.stream.reconfigure(encoding='utf-8')
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format=log_format,
+    handlers=[
+        logging.FileHandler("server.log", encoding='utf-8'),
+        stream_handler
+    ]
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("sea-level-server")
+
+# Add backend to path for module imports
+sys.path.append(str(backend_root))
+
+# Import your application modules with error handling
+try:
+    from shared.database import db_manager
+    logger.info("✅ Database manager imported successfully")
+except ImportError as e:
+    logger.error(f"❌ Failed to import database manager: {e}")
+    db_manager = None
+    
+try:
+    from lambdas.get_stations.main import lambda_handler as get_stations_handler
+    from lambdas.get_data.main import lambda_handler as get_data_handler
+    from lambdas.get_live_data.main import lambda_handler as get_live_data_handler
+    from lambdas.get_predictions.main import lambda_handler as get_predictions_handler
+    from lambdas.get_sea_forecast.main import lambda_handler as get_sea_forecast_handler
+    logger.info("✅ Lambda handlers imported successfully")
+except ImportError as e:
+    logger.error(f"❌ Failed to import Lambda handlers: {e}")
+    logger.error("Make sure all lambda folders exist with main.py files")
+    # Create dummy handlers
+    def dummy_handler(event, context=None):
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Handler not implemented"})
+        }
+    get_stations_handler = dummy_handler
+    get_data_handler = dummy_handler
+    get_live_data_handler = dummy_handler
+    get_predictions_handler = dummy_handler
+    get_sea_forecast_handler = dummy_handler
+
+# Global variable for frontend process
+frontend_process: Optional[subprocess.Popen] = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifecycle"""
+    logger.info("=" * 60)
+    logger.info("🚀 Starting Sea Level Dashboard Server...")
+    logger.info(f"Platform: {sys.platform}")
+    logger.info(f"Python: {sys.version}")
+    logger.info("=" * 60)
+    
+    # Get configuration
+    port = int(os.getenv("BACKEND_PORT", "30886"))
+    
+    logger.info("Server Configuration:")
+    logger.info(f"  Port: {port}")
+    logger.info(f"  Environment: {os.getenv('ENV', 'production')}")
+    logger.info(f"  Debug: {os.getenv('DEBUG', 'False')}")
+    logger.info("=" * 60)
+    
+    logger.info("Server will be accessible at:")
+    logger.info(f"  📍 Local: http://127.0.0.1:{port}")
+    logger.info(f"  📚 API Docs: http://127.0.0.1:{port}/docs")
+    logger.info("=" * 60)
+    
+    # Attach the globally-imported db_manager to the app state
+    if db_manager:
+        app.state.db_manager = db_manager
+        logger.info("✅ Database connection established via module import")
+    else:
+        logger.warning("⚠️ Database manager not available, running in demo mode")
+    
+    # Check if frontend needs to be started
+    if os.getenv("AUTO_START_FRONTEND", "false").lower() == "true":
+        start_frontend_dev_server()
+    
+    yield
+    
+    # Cleanup
+    logger.info("🛑 Shutting down server...")
+    
+    # Stop frontend if running
+    stop_frontend_dev_server()
+    
+    # No need to explicitly close engine here as SQLAlchemy handles pooling
+    logger.info("✅ Server shutdown complete")
 
 # Create FastAPI app
 app = FastAPI(
-    title="Sea Level Monitoring API",
-    description="Local development server for Sea Level Monitoring System",
-    version="1.0.0",
+    title="Sea Level Dashboard API",
+    description="Real-time sea level monitoring with predictive analytics",
+    version="2.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan
 )
 
-# Enable CORS for local development
+# Configure CORS - Allow all for development/production hybrid
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if os.getenv("CORS_ORIGINS") != "*" else ["*"]
+
+# Add comprehensive CORS origins
+if cors_origins != ["*"]:
+    cors_origins.extend([
+        "http://localhost:30886",
+        "http://localhost:3000",
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "http://sea-level-dash-local:3000",
-        "http://sea-level-dash-local:8001"
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
-# Mount static files for assets
-frontend_assets_path = project_root / "frontend" / "public" / "assets"
-if frontend_assets_path.exists():
-    app.mount("/assets", StaticFiles(directory=str(frontend_assets_path)), name="assets")
+# Add compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Global variables for server management
-frontend_process = None
-frontend_thread = None
-auto_start_frontend = False
-
-def lambda_response_to_fastapi(lambda_response):
-    """Convert Lambda response format to FastAPI response"""
-    try:
-        status_code = lambda_response.get("statusCode", 200)
-        body = lambda_response.get("body", "{}")
-        
-        if isinstance(body, str):
-            try:
-                return json.loads(body)
-            except json.JSONDecodeError:
-                return {"data": body}
-        return body
-    except Exception as e:
-        logger.error(f"Error converting lambda response: {e}")
-        return {"error": "Internal server error"}
-
-def find_node_executable():
-    """Find Node.js executable on Windows"""
-    # Common Node.js installation paths on Windows
-    common_paths = [
-        "node",  # If in PATH
+# Helper Functions
+def check_node_npm_windows():
+    """Check if Node.js and npm are available on Windows"""
+    
+    # Common paths on Windows
+    node_paths = [
+        "node",
         "node.exe",
         r"C:\Program Files\nodejs\node.exe",
         r"C:\Program Files (x86)\nodejs\node.exe",
         os.path.expanduser(r"~\AppData\Roaming\npm\node.exe"),
     ]
     
-    for path in common_paths:
-        try:
-            if shutil.which(path):
-                return path
-        except:
-            continue
-    
-    return None
-
-def find_npm_executable():
-    """Find npm executable on Windows - fixed version"""
-    # Try different npm commands with shell=True for Windows
-    npm_commands = ["npm", "npm.cmd"]
-    
-    for cmd in npm_commands:
+    for node_path in node_paths:
         try:
             result = subprocess.run(
-                [cmd, "--version"], 
-                capture_output=True, 
-                text=True,
-                timeout=10,
-                shell=True  # This is key for Windows
-            )
-            if result.returncode == 0:
-                return cmd
-        except:
-            continue
-    
-    # Try with full paths
-    common_paths = [
-        r"C:\Program Files\nodejs\npm.cmd",
-        r"C:\Program Files (x86)\nodejs\npm.cmd",
-        os.path.expanduser(r"~\AppData\Roaming\npm\npm.cmd"),
-    ]
-    
-    for path in common_paths:
-        if os.path.exists(path):
-            try:
-                result = subprocess.run(
-                    [path, "--version"], 
-                    capture_output=True, 
-                    text=True,
-                    timeout=10,
-                    shell=True
-                )
-                if result.returncode == 0:
-                    return path
-            except:
-                continue
-    
-    return None
-
-def check_frontend_dependencies():
-    """Check if frontend dependencies are available - Windows compatible"""
-    try:
-        frontend_dir = project_root / "frontend"
-        
-        if not frontend_dir.exists():
-            logger.warning(f"Frontend directory not found: {frontend_dir}")
-            return False
-        
-        # Check if package.json exists
-        package_json = frontend_dir / "package.json"
-        if not package_json.exists():
-            logger.warning(f"Frontend package.json not found: {package_json}")
-            return False
-        
-        # Find Node.js executable
-        node_exe = find_node_executable()
-        if not node_exe:
-            logger.warning("Node.js executable not found")
-            return False
-        
-        # Check if Node.js works
-        try:
-            result = subprocess.run(
-                [node_exe, "--version"], 
-                capture_output=True, 
-                text=True,
-                timeout=10,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-            )
-            if result.returncode != 0:
-                logger.warning(f"Node.js check failed: {result.stderr}")
-                return False
-            logger.info(f"✅ Node.js found: {result.stdout.strip()}")
-        except Exception as e:
-            logger.warning(f"Node.js check error: {e}")
-            return False
-        
-        # Find npm executable
-        npm_exe = find_npm_executable()
-        if not npm_exe:
-            logger.warning("npm executable not found")
-            return False
-        
-        # Check if npm works
-        try:
-            result = subprocess.run(
-                [npm_exe, "--version"], 
-                capture_output=True, 
-                text=True,
-                timeout=10,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-            )
-            if result.returncode != 0:
-                logger.warning(f"npm check failed: {result.stderr}")
-                return False
-            logger.info(f"✅ npm found: {result.stdout.strip()}")
-        except Exception as e:
-            logger.warning(f"npm check error: {e}")
-            return False
-        
-        logger.info("✅ Frontend dependencies available")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error checking frontend dependencies: {e}")
-        return False
-
-def install_frontend_dependencies():
-    """Install frontend npm packages if needed - Windows compatible"""
-    try:
-        frontend_dir = project_root / "frontend"
-        node_modules = frontend_dir / "node_modules"
-        
-        if not node_modules.exists():
-            logger.info("📦 Installing npm packages...")
-            
-            npm_exe = find_npm_executable()
-            if not npm_exe:
-                logger.error("npm executable not found")
-                return False
-            
-            result = subprocess.run(
-                [npm_exe, "install"],
-                cwd=frontend_dir,
+                [node_path, "--version"],
                 capture_output=True,
                 text=True,
-                timeout=300,  # 5 minutes timeout
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                timeout=5,
+                shell=False
             )
-            
             if result.returncode == 0:
-                logger.info("✅ npm packages installed successfully")
+                logger.info(f"✅ Node.js found: {result.stdout.strip()}")
                 return True
-            else:
-                logger.error(f"❌ npm install failed: {result.stderr}")
-                return False
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error installing frontend dependencies: {e}")
-        return False
+        except:
+            continue
+    
+    logger.warning("⚠️ Node.js not found. Frontend auto-start disabled.")
+    logger.info("   Install from: https://nodejs.org/")
+    return False
 
-def start_frontend_server():
-    """Start React development server in a separate process - Windows compatible"""
+def start_frontend_dev_server():
+    """Start frontend development server on Windows"""
     global frontend_process
     
+    if not check_node_npm_windows():
+        return
+    
+    frontend_path = frontend_root
+    if not frontend_path.exists():
+        logger.warning(f"⚠️ Frontend directory not found: {frontend_path}")
+        return
+    
     try:
-        frontend_dir = project_root / "frontend"
+        logger.info("🎨 Starting frontend development server...")
         
-        if not frontend_dir.exists():
-            logger.error("Frontend directory not found")
-            return False
+        # Use npm.cmd on Windows
+        npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
         
-        # Install dependencies if needed
-        if not install_frontend_dependencies():
-            logger.error("Failed to install frontend dependencies")
-            return False
-        
-        logger.info("🎨 Starting React development server...")
-        
-        npm_exe = find_npm_executable()
-        if not npm_exe:
-            logger.error("npm executable not found")
-            return False
-        
-        # Set environment variables to prevent browser auto-opening
+        # Set environment variables
         env = os.environ.copy()
-        env["BROWSER"] = "none"
+        env["BROWSER"] = "none"  # Don't open browser
         
-        # Start npm start process
         frontend_process = subprocess.Popen(
-            [npm_exe, "start"],
-            cwd=frontend_dir,
+            [npm_cmd, "start"],
+            cwd=str(frontend_path),
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            env=env,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            shell=False,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         )
         
-        # Wait a bit and check if process started successfully
-        time.sleep(5)
+        logger.info("✅ Frontend development server started")
         
-        if frontend_process.poll() is None:  # Process is still running
-            logger.info("✅ React development server started successfully")
-            logger.info("🌐 Frontend available at: http://localhost:3000")
-            
-            # Open browser after 5 seconds
-            def open_browser():
-                time.sleep(5)
-                try:
-                    webbrowser.open("http://localhost:3000")
-                    logger.info("🌐 Browser opened automatically")
-                except Exception as e:
-                    logger.warning(f"Could not open browser automatically: {e}")
-            
-            browser_thread = threading.Thread(target=open_browser)
-            browser_thread.daemon = True
-            browser_thread.start()
-            
-            return True
-        else:
-            logger.error("❌ React development server failed to start")
-            if frontend_process.stderr:
-                stderr_output = frontend_process.stderr.read()
-                logger.error(f"Error output: {stderr_output}")
-            return False
-            
     except Exception as e:
-        logger.error(f"Error starting frontend server: {e}")
-        return False
+        logger.error(f"❌ Failed to start frontend: {e}")
 
-def stop_frontend_server():
-    """Stop the React development server"""
+def stop_frontend_dev_server():
+    """Stop frontend development server"""
     global frontend_process
     
     if frontend_process:
         try:
-            frontend_process.terminate()
-            frontend_process.wait(timeout=10)
-            logger.info("🛑 React development server stopped")
-        except (subprocess.TimeoutExpired, OSError) as e:
-            logger.error(f"Error stopping frontend server: {e}")
-            try:
-                frontend_process.kill()
-            except (OSError, AttributeError):
-                logger.warning("Could not kill frontend process")
+            if sys.platform == "win32":
+                # Windows: Use taskkill
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(frontend_process.pid)],
+                    capture_output=True
+                )
+            else:
+                # Unix: Send SIGTERM
+                frontend_process.terminate()
+                frontend_process.wait(timeout=5)
+            
+            logger.info("✅ Frontend server stopped")
+        except:
+            pass
         finally:
             frontend_process = None
 
-# API Routes
-@app.get("/")
-async def root():
-    """Root endpoint with API information"""
-    return {
-        "message": "Sea Level Monitoring API",
-        "status": "running",
-        "timestamp": datetime.now().isoformat(),
-        "version": "1.0.0",
-        "lambda_handlers": LAMBDA_HANDLERS_AVAILABLE,
-        "lambda_errors": lambda_import_errors if lambda_import_errors else None,
-        "endpoints": {
-            "health": "/health",
-            "stations": "/stations",
-            "data": "/data",
-            "live": "/live",
-            "predictions": "/predictions",
-            "map": "/stations/map",
-            "docs": "/docs"
-        }
-    }
+# Helper function to convert Lambda responses
+def lambda_to_fastapi_response(lambda_response: dict) -> JSONResponse:
+    """Convert Lambda response to FastAPI response"""
+    try:
+        status_code = lambda_response.get("statusCode", 200)
+        body = lambda_response.get("body", "{}")
+        headers = lambda_response.get("headers", {})
+        
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                body = {"data": body}
+        
+        return JSONResponse(
+            content=body,
+            status_code=status_code,
+            headers=headers
+        )
+    except Exception as e:
+        logger.error(f"Error converting lambda response: {e}")
+        return JSONResponse(
+            content={"error": "Internal server error"},
+            status_code=500
+        )
 
-@app.get("/health")
+# API Routes
+@app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
-    # Test database connection
-    db_status = "unknown"
-    try:
-        from shared.database import db_manager
-        if db_manager and db_manager.health_check():
-            db_status = "connected"
-        else:
-            db_status = "disconnected"
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-    
-    return {
+    health_status = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "database": db_status,
-        "lambda_handlers": LAMBDA_HANDLERS_AVAILABLE,
-        "frontend": frontend_process is not None and frontend_process.poll() is None,
-        "node_available": find_node_executable() is not None,
-        "npm_available": find_npm_executable() is not None
+        "platform": sys.platform,
+        "python_version": sys.version,
+        "server_status": "online"
     }
-
-@app.get("/stations")
-async def get_stations():
-    """Get all available stations"""
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        # Return demo data if handlers not available
-        return {
-            "stations": ["All Stations", "Demo Station 1", "Demo Station 2", "Demo Station 3"],
-            "note": "Demo data - Lambda handlers not available"
-        }
     
+    # Check database
     try:
-        event = {}
+        if db_manager and db_manager.health_check():
+            health_status["database"] = "connected"
+        else:
+            health_status["database"] = "disconnected"
+    except Exception as e:
+        health_status["database"] = f"disconnected ({e})"
+    
+    return health_status
+
+@app.get("/api/stations")
+async def get_stations():
+    """Get all monitoring stations"""
+    try:
+        event = {"httpMethod": "GET", "path": "/stations", "queryStringParameters": {}}
         response = get_stations_handler(event, None)
-        return lambda_response_to_fastapi(response)
+        return lambda_to_fastapi_response(response)
     except Exception as e:
         logger.error(f"Error in get_stations: {e}")
-        # Return demo data on error
+        # Return default stations as fallback
         return {
-            "stations": ["All Stations", "Error Station"],
+            "stations": ["Acre", "Yafo", "Ashkelon", "Eilat", "All Stations"],
+            "database_available": False,
             "error": str(e)
         }
 
-@app.get("/data")
+@app.get("/api/data")
 async def get_data(
-    station: Optional[str] = Query(None, description="Station name"),
-    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    data_source: str = Query("default", description="Data source (default|tides)"),
-    show_anomalies: bool = Query(False, description="Include anomaly detection")
+    station: str = "All Stations",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    data_source: str = "default"
 ):
-    """Get data with optional filters"""
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        return {
-            "message": "Demo data - Lambda handlers not available",
-            "parameters": {
-                "station": station,
-                "start_date": start_date,
-                "end_date": end_date,
-                "data_source": data_source,
-                "show_anomalies": show_anomalies
-            }
-        }
-    
+    """Get historical data"""
     try:
         event = {
+            "httpMethod": "GET",
+            "path": "/data",
             "queryStringParameters": {
                 "station": station,
                 "start_date": start_date,
                 "end_date": end_date,
-                "data_source": data_source,
-                "show_anomalies": str(show_anomalies).lower()
+                "data_source": data_source
             }
         }
         response = get_data_handler(event, None)
-        return lambda_response_to_fastapi(response)
+        return lambda_to_fastapi_response(response)
     except Exception as e:
         logger.error(f"Error in get_data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            content={"error": str(e), "data": []},
+            status_code=500
+        )
 
-# Add the remaining endpoints (live, yesterday, predictions, map, mapframe)
-@app.get("/live")
-async def get_live_data_all():
-    """Get live data for all stations"""
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        return {"message": "Demo data - Lambda handlers not available", "data": []}
-    
-    try:
-        event = {}
-        response = get_live_data_handler(event, None)
-        return lambda_response_to_fastapi(response)
-    except Exception as e:
-        logger.error(f"Error in get_live_data: {e}")
-        return {"error": str(e), "data": []}
-
-@app.get("/live/{station}")
-async def get_live_data_station(station: str):
-    """Get live data for specific station"""
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        return {"message": f"Demo data for {station} - Lambda handlers not available", "data": []}
-    
-    try:
-        event = {"pathParameters": {"station": station}}
-        response = get_live_data_handler(event, None)
-        return lambda_response_to_fastapi(response)
-    except Exception as e:
-        logger.error(f"Error in get_live_data for station {station}: {e}")
-        return {"error": str(e), "station": station, "data": []}
-
-@app.get("/predictions")
-async def get_predictions(
-    station: Optional[str] = Query(None, description="Station name (legacy)"),
-    stations: Optional[str] = Query(None, description="Station names (comma-separated)"),
-    model: str = Query("all", description="Model type (arima|kalman|ensemble|all)"),
-    steps: int = Query(240, description="Number of hours to forecast")
-):
-    """Get predictions for station(s)"""
-    # Support both 'station' and 'stations' parameters
-    station_param = stations or station
-    
-    if not station_param:
-        raise HTTPException(status_code=400, detail="Station parameter is required")
-    
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        return {
-            "message": f"Demo predictions for {station_param} - Lambda handlers not available",
-            "arima": None,
-            "kalman": None,
-            "ensemble": None
-        }
-    
+@app.get("/api/live-data")
+async def get_live_data(station: Optional[str] = None):
+    """Get latest measurements"""
     try:
         event = {
+            "httpMethod": "GET",
+            "path": "/live-data",
+            "queryStringParameters": {"station": station} if station else {}
+        }
+        response = get_live_data_handler(event, None)
+        return lambda_to_fastapi_response(response)
+    except Exception as e:
+        logger.error(f"Error in get_live_data: {e}")
+        return JSONResponse(
+            content={"error": str(e), "data": []},
+            status_code=500
+        )
+
+@app.get("/api/predictions")
+async def get_predictions(
+    stations: str = "Acre",
+    model: str = "kalman",
+    forecast_hours: int = 72
+):
+    """Get predictions"""
+    try:
+        event = {
+            "httpMethod": "GET",
+            "path": "/predictions",
             "queryStringParameters": {
-                "stations": station_param,
+                "stations": stations,
                 "model": model,
-                "steps": str(steps)
+                "forecast_hours": str(forecast_hours)
             }
         }
         response = get_predictions_handler(event, None)
-        return lambda_response_to_fastapi(response)
+        return lambda_to_fastapi_response(response)
     except Exception as e:
-        from security import secure_log
-        secure_log(logger, 'error', 'Error in get_predictions', error=str(e))
-        return {"error": str(e), "arima": None, "kalman": None, "ensemble": None}
+        logger.error(f"Error in get_predictions: {e}")
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
 
-@app.get("/stations/map")
-async def get_station_map(end_date: str = None):
-    """Get station map data"""
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        return {"message": "Demo map data - Lambda handlers not available", "stations": []}
-    
-    try:
-        event = {
-            "queryStringParameters": {
-                "end_date": end_date
-            } if end_date else {}
-        }
-        response = get_station_map_handler(event, None)
-        return lambda_response_to_fastapi(response)
-    except Exception as e:
-        logger.error(f"Error in get_station_map: {e}")
-        return {"error": str(e), "stations": []}
-
-@app.get("/api/stations/map")
-async def get_api_station_map():
-    """Get station map data - API endpoint matching Python version"""
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        return []
-    
-    try:
-        event = {}
-        response = get_station_map_handler(event, None)
-        data = lambda_response_to_fastapi(response)
-        # Return the data directly as array, not wrapped in response object
-        return data if isinstance(data, list) else []
-    except Exception as e:
-        logger.error(f"Error in get_api_station_map: {e}")
-        return []
-
-@app.get("/sea-forecast")
+@app.get("/api/sea-forecast")
 async def get_sea_forecast():
-    """Get IMS sea forecast data"""
-    if not LAMBDA_HANDLERS_AVAILABLE:
-        return {"message": "Demo forecast data - Lambda handlers not available", "locations": []}
-    
+    """Get sea conditions forecast"""
     try:
-        event = {}
+        event = {"httpMethod": "GET", "path": "/sea-forecast", "queryStringParameters": {}}
         response = get_sea_forecast_handler(event, None)
-        return lambda_response_to_fastapi(response)
+        return lambda_to_fastapi_response(response)
     except Exception as e:
         logger.error(f"Error in get_sea_forecast: {e}")
-        return {"error": str(e), "locations": []}
-
-@app.get("/assets/{filename}")
-async def get_asset(filename: str):
-    """Serve static assets like icons"""
-    asset_path = project_root / "frontend" / "public" / "assets" / filename
-    if asset_path.exists():
-        return FileResponse(asset_path)
-    else:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
-@app.get("/mapframe")
-async def get_mapframe(end_date: str = None):
-    """Serve GovMap iframe with station and wave forecast data"""
-    from security import secure_log
-    secure_log(logger, 'info', 'mapframe requested', end_date=end_date or 'None')
-    
-    # Read the HTML file and serve it
-    mapframe_path = current_dir / "mapframe.html"
-    if mapframe_path.exists():
-        with open(mapframe_path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        return HTMLResponse(content=html_content)
-    else:
-        raise HTTPException(status_code=404, detail="Mapframe HTML not found")
-
-# Frontend management endpoints
-@app.post("/dev/frontend/start")
-async def start_frontend_api():
-    """Development endpoint to start frontend server"""
-    # Remove client-side authorization check for development endpoint
-    if not check_frontend_dependencies():
-        raise HTTPException(status_code=503, detail="Frontend dependencies not available")
-    
-    global frontend_thread
-    
-    if frontend_process and frontend_process.poll() is None:
-        return {"message": "Frontend server is already running", "url": "http://localhost:3000"}
-    
-    # Start frontend in a separate thread
-    frontend_thread = threading.Thread(target=start_frontend_server)
-    frontend_thread.daemon = True
-    frontend_thread.start()
-    
-    # Wait a bit to see if it started successfully
-    time.sleep(5)
-    
-    if frontend_process and frontend_process.poll() is None:
-        return {"message": "Frontend server started successfully", "url": "http://localhost:3000"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to start frontend server")
-
-@app.post("/dev/frontend/stop")
-async def stop_frontend_api():
-    """Development endpoint to stop frontend server"""
-    stop_frontend_server()
-    return {"message": "Frontend server stopped"}
-
-@app.get("/dev/frontend/status")
-async def frontend_status():
-    """Development endpoint to check frontend status"""
-    if frontend_process and frontend_process.poll() is None:
-        return {
-            "status": "running",
-            "url": "http://localhost:3000",
-            "pid": frontend_process.pid
-        }
-    else:
-        return {
-            "status": "stopped",
-            "node_available": find_node_executable() is not None,
-            "npm_available": find_npm_executable() is not None,
-            "frontend_dir_exists": (project_root / "frontend").exists()
-        }
-
-def main():
-    """Main function to run the development server"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Sea Level Monitoring Development Server")
-    parser.add_argument("--host", default="sea-level-dash-local", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
-    parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
-    parser.add_argument("--auto-frontend", action="store_true", help="Auto-start frontend server")
-    parser.add_argument("--no-frontend", action="store_true", help="Don't check for frontend")
-    
-    args = parser.parse_args()
-    
-    global auto_start_frontend
-    auto_start_frontend = args.auto_frontend
-    
-    print("=" * 70)
-    print("🌊 Sea Level Monitoring System - Development Server")
-    print("=" * 70)
-    print(f"🚀 Backend API: http://{args.host}:{args.port}")
-    print(f"📚 API Docs: http://{args.host}:{args.port}/docs")
-    
-    # Lambda handlers status
-    if LAMBDA_HANDLERS_AVAILABLE:
-        print("✅ Lambda handlers: Available")
-    else:
-        print("⚠️  Lambda handlers: Not available (using demo data)")
-        if lambda_import_errors:
-            print(f"   Errors: {lambda_import_errors[0]}")
-    
-    # Frontend status
-    if not args.no_frontend:
-        if check_frontend_dependencies():
-            print("✅ Frontend: Available")
-            print("   📱 Frontend URL: http://localhost:3000")
-            print("   🔧 Start Frontend: POST /dev/frontend/start")
-            if args.auto_frontend:
-                print("   ⚡ Auto-start: ENABLED")
-        else:
-            print("⚠️  Frontend: Dependencies not available")
-            node_exe = find_node_executable()
-            npm_exe = find_npm_executable()
-            print(f"   Node.js: {'✅' if node_exe else '❌'}")
-            print(f"   npm: {'✅' if npm_exe else '❌'}")
-            print(f"   Frontend dir: {'✅' if (project_root / 'frontend').exists() else '❌'}")
-    
-    print("=" * 70)
-    print("💡 Usage Tips:")
-    print("   - Use /health to check system status")
-    print("   - Use /docs for interactive API documentation")
-    print("   - Press Ctrl+C to stop the server")
-    print("=" * 70)
-    
-    try:
-        import uvicorn
-        uvicorn.run(
-            app, 
-            host=args.host, 
-            port=args.port, 
-            reload=args.reload,
-            log_level="info"
+        return JSONResponse(
+            content={"error": str(e), "forecast": []},
+            status_code=500
         )
-    except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
-    except Exception as e:
-        print(f"\n❌ Server error: {e}")
-    finally:
-        stop_frontend_server()
-        print("👋 Goodbye!")
+
+@app.get("/api/stations/map")
+async def get_stations_map():
+    """Get stations with coordinates for map display"""
+    stations_data = [
+        {"Station": "Acre", "x": 35.0818, "y": 32.9279, "status": "active"},
+        {"Station": "Yafo", "x": 34.7505, "y": 32.0542, "status": "active"},
+        {"Station": "Ashkelon", "x": 34.5668, "y": 31.6688, "status": "active"},
+        {"Station": "Eilat", "x": 34.9497, "y": 29.5577, "status": "active"}
+    ]
+    return stations_data
+
+# --- Static File Serving ---
+# This section must come AFTER all API routes are defined.
+frontend_build = frontend_root / "build"
+if frontend_build.exists():
+    logger.info(f"📁 Serving frontend from {frontend_build}")
+
+    # Mount the 'static' folder from the build directory, if it exists
+    static_dir = frontend_build / "static"
+    if static_dir.is_dir():
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+        # This catch-all route should serve the index.html for any path that is not an API route or a static file.
+        # It's important this comes after the API routes.
+        @app.get("/{full_path:path}", response_class=FileResponse, include_in_schema=False)
+        async def serve_react_app(full_path: str):
+            file_path = frontend_build / full_path
+            # If the requested path points to a file in the build directory (like assets), serve it directly.
+            if file_path.is_file():
+                return FileResponse(str(file_path))
+            # Otherwise, serve the main index.html file for client-side routing.
+            index_html_path = frontend_build / "index.html"
+            if index_html_path.exists():
+                return FileResponse(str(index_html_path))
+            return JSONResponse(content={"message": "Frontend not built."}, status_code=404)
+    else:
+        logger.warning(f"⚠️ Frontend 'static' directory not found at {static_dir}. UI will not be served.")
+        @app.get("/", include_in_schema=False)
+        async def root_fallback():
+            return JSONResponse(content={"message": "Backend is running, but the frontend is not built."})
+
+# Windows-compatible signal handling
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logger.info(f"\n⚠️ Received signal {signum}, shutting down gracefully...")
+    stop_frontend_dev_server()
+    sys.exit(0)
+
+# Register signal handlers (Windows compatible)
+if sys.platform == "win32":
+    # Windows only supports SIGTERM and SIGINT
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # Termination
+else:
+    # Unix/Linux supports more signals
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
 if __name__ == "__main__":
-    main()
+    # Get configuration from environment
+    host = os.getenv("HOST", "0.0.0.0")  # Listen on all interfaces
+    port = int(os.getenv("BACKEND_PORT", "30886"))
+    env = os.getenv("ENV", "production")
+    
+    print("\n" + "=" * 60)
+    print("🌊 SEA LEVEL DASHBOARD SERVER")
+    print("=" * 60)
+    print(f"Platform: {sys.platform}")
+    print(f"Environment: {env}")
+    print(f"Starting on: {host}:{port}")
+    print("=" * 60)
+    print(f"Access URLs:")
+    print(f"  📍 Local:    http://127.0.0.1:{port}")
+    print(f"  📚 API Docs: http://127.0.0.1:{port}/docs")
+    print("=" * 60)
+    print("Press Ctrl+C to stop the server")
+    print("=" * 60 + "\n")
+    
+    # Run server
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        log_level="info",
+        access_log=True,
+        use_colors=True,
+        # Only use reload in development
+        reload=(env == "development"),
+        # Workers for production (Windows supports only 1 worker with reload=False)
+        workers=1
+    )
