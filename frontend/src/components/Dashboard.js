@@ -1156,12 +1156,7 @@ function Dashboard() {
                 />
               </Col>
               <Col lg={4} md={8} sm={12}>
-                <div className="stats-card h-100">
-                  <div className="card-body p-3">
-                    <h6 className="card-title mb-2">🚨 IMS Warnings</h6>
-                    <WarningsCard apiBaseUrl={API_BASE_URL} />
-                  </div>
-                </div>
+                <WarningsCard apiBaseUrl={API_BASE_URL} />
               </Col>
             </Row>
 

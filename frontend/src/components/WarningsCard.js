@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Badge } from 'react-bootstrap';
 
 const WarningsCard = ({ apiBaseUrl }) => {
   const [warnings, setWarnings] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,68 +21,81 @@ const WarningsCard = ({ apiBaseUrl }) => {
     };
 
     fetchWarnings();
-    const interval = setInterval(fetchWarnings, 15 * 60 * 1000); // 15 minutes
+    const interval = setInterval(fetchWarnings, 15 * 60 * 1000);
     return () => clearInterval(interval);
   }, [apiBaseUrl]);
 
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'red': return 'danger';
-      case 'orange': return 'warning';
-      case 'yellow': return 'warning';
-      default: return 'info';
+  // Cycle through warnings every 4 seconds
+  useEffect(() => {
+    if (warnings.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentIndex(prev => (prev + 1) % warnings.length);
+      }, 4000);
+      return () => clearInterval(interval);
     }
-  };
+  }, [warnings.length]);
 
-  const formatDate = (dateStr) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return dateStr;
+  const getWarningColor = (severity) => {
+    switch (severity) {
+      case 'red': return '#dc3545';
+      case 'orange': return '#fd7e14';
+      case 'yellow': return '#ffc107';
+      default: return '#0d6efd';
     }
   };
 
   if (loading) {
-    return <div className="text-muted">Loading warnings...</div>;
-  }
-
-  if (warnings.length === 0) {
     return (
-      <div className="text-center">
-        <Badge bg="success" className="px-3 py-2">
-          ✓ No Active Warnings
-        </Badge>
+      <div className="stats-card h-100">
+        <div className="card-body text-center p-3">
+          <div className="spinner-border spinner-border-sm" role="status"></div>
+        </div>
       </div>
     );
   }
 
+  const currentWarning = warnings[currentIndex];
+  const warningCount = warnings.length;
+  const color = currentWarning ? getWarningColor(currentWarning.severity) : '#28a745';
+
   return (
-    <div>
-      {warnings.map((warning, index) => (
-        <div key={index} className={`mb-2 ${index > 0 ? 'pt-2 border-top' : ''}`}>
-          <div className="d-flex justify-content-between align-items-start mb-1">
-            <Badge bg={getSeverityColor(warning.severity)} className="me-2">
-              {warning.severity.toUpperCase()}
-            </Badge>
-            <small className="text-muted">{formatDate(warning.pub_date)}</small>
-          </div>
-          <div className="small">
-            <strong>{warning.title}</strong>
-          </div>
-          {warning.description && (
-            <div className="small text-muted mt-1" 
-                 dangerouslySetInnerHTML={{ 
-                   __html: warning.description.replace(/<[^>]*>/g, '').substring(0, 100) + '...' 
-                 }} 
-            />
+    <div className="stats-card h-100" style={{ borderLeft: `4px solid ${color}` }}>
+      <div className="card-body p-3">
+        <h6 className="card-title mb-2" style={{ color }}>
+          🚨 IMS Warnings
+        </h6>
+        <div className="stats-value mb-2">
+          <span className="h3 mb-0" style={{ color }}>
+            {warningCount}
+          </span>
+        </div>
+        <div 
+          className="warning-message" 
+          style={{ 
+            height: '60px', 
+            overflow: 'hidden',
+            transition: 'transform 0.5s ease-in-out'
+          }}
+        >
+          {warningCount === 0 ? (
+            <div className="text-success small">
+              ✓ No Active Warnings
+            </div>
+          ) : (
+            <div className="small" style={{ color }}>
+              <strong>{currentWarning.title}</strong>
+              <div className="text-muted mt-1">
+                {new Date(currentWarning.pub_date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </div>
+            </div>
           )}
         </div>
-      ))}
+      </div>
     </div>
   );
 };
