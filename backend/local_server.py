@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi import HTTPException
 from dotenv import load_dotenv
 
 # Setup paths
@@ -465,6 +466,79 @@ async def get_ims_warnings():
             content={"error": str(e), "warnings": []},
             status_code=500
         )
+
+@app.get("/mariners-forecast")
+async def get_mariners_forecast():
+    """Get mariners forecast from IMS"""
+    try:
+        import xml.etree.ElementTree as ET
+        import requests
+        
+        url = "https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_sea.xml"
+        response = requests.get(url, timeout=10)
+        
+        # Try different encodings
+        for encoding in ['iso-8859-1', 'utf-8', 'windows-1255']:
+            try:
+                content = response.content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        root = ET.fromstring(content)
+        
+        # Parse metadata
+        metadata = {
+            'organization': root.find('.//organization').text if root.find('.//organization') is not None else '',
+            'title': root.find('.//title').text if root.find('.//title') is not None else '',
+            'issue_datetime': root.find('.//issue_datetime').text if root.find('.//issue_datetime') is not None else ''
+        }
+        
+        # Parse locations
+        locations = []
+        for location in root.findall('.//location'):
+            location_data = {
+                'id': location.get('id', ''),
+                'name_eng': location.get('name_eng', ''),
+                'name_heb': location.get('name_heb', ''),
+                'forecasts': []
+            }
+            
+            for time_period in location.findall('.//time_period'):
+                forecast = {
+                    'from': time_period.get('from', ''),
+                    'to': time_period.get('to', ''),
+                    'elements': {}
+                }
+                
+                for element in time_period.findall('.//element'):
+                    element_name = element.get('name', '')
+                    element_value = element.text or ''
+                    forecast['elements'][element_name] = element_value
+                
+                location_data['forecasts'].append(forecast)
+            
+            locations.append(location_data)
+        
+        return {
+            'metadata': metadata,
+            'locations': locations
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching mariners forecast: {e}")
+        return JSONResponse(
+            content={"error": f"Error fetching mariners forecast: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/mariners-mapframe")
+async def mariners_mapframe():
+    """Serve the mariners forecast map iframe"""
+    mapframe_path = backend_root / "mariners_mapframe.html"
+    if mapframe_path.exists():
+        return FileResponse(str(mapframe_path), media_type="text/html")
+    return JSONResponse(content={"error": "Mariners mapframe not found"}, status_code=404)
 
 @app.get("/api/stations/map")
 async def get_api_stations_map(end_date: Optional[str] = None):
