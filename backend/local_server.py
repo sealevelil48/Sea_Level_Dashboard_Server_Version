@@ -467,7 +467,7 @@ async def get_ims_warnings():
             status_code=500
         )
 
-@app.get("/mariners-forecast")
+@app.get("/api/mariners-forecast")
 async def get_mariners_forecast():
     """Get mariners forecast from IMS"""
     try:
@@ -532,7 +532,7 @@ async def get_mariners_forecast():
             status_code=500
         )
 
-@app.get("/mariners-mapframe")
+@app.get("/api/mariners-mapframe")
 async def mariners_mapframe():
     """Serve the mariners forecast map iframe"""
     mapframe_path = backend_root / "mariners_mapframe.html"

@@ -44,7 +44,7 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${apiBaseUrl}/mariners-forecast`);
+      const response = await fetch(`${apiBaseUrl}/api/mariners-forecast`);
       if (response.ok) {
         const data = await response.json();
         setForecastData(data);
@@ -225,7 +225,7 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
             })()}
             {iframeCreated && (
               <iframe
-                src={`${apiBaseUrl}/mariners-mapframe`}
+                src={`${apiBaseUrl}/api/mariners-mapframe`}
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title="Mariners Forecast Map"
                 allow="geolocation; accelerometer; clipboard-write"

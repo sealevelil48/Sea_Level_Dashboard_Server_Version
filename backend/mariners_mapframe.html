@@ -83,7 +83,7 @@
         
         async function fetchMarinersData() {
             try {
-                const response = await fetch('/mariners-forecast');
+                const response = await fetch('/api/mariners-forecast');
                 const data = await response.json();
                 
                 if (data.locations) {
