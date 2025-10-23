@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Badge, Spinner, Button } from 'react-bootstrap';
-import { parseWaveHeight, parseWindInfo } from '../utils/imsCodeTranslations';
+import { parseWaveHeight, parseWindInfo, getWaveRiskColor, getWindRiskColor } from '../utils/imsCodeTranslations';
 
 const SeaForecastView = ({ apiBaseUrl }) => {
   const [forecastData, setForecastData] = useState(null);
@@ -48,19 +48,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
     });
   };
 
-  const getWaveHeightColor = (waveHeight) => {
-    const height = parseInt(waveHeight.split(' / ')[0]);
-    if (height >= 50) return 'danger';
-    if (height >= 30) return 'warning';
-    return 'success';
-  };
 
-  const getWindSpeedColor = (windSpeed) => {
-    const speed = parseInt(windSpeed.split('/')[1]?.split('-')[1] || '0');
-    if (speed >= 25) return 'danger';
-    if (speed >= 15) return 'warning';
-    return 'success';
-  };
 
   if (loading) {
     return (
@@ -144,7 +132,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
                       <Col xs={12}>
                         <div className="d-flex justify-content-between align-items-center">
                           <span className="small">Wave Height:</span>
-                          <Badge bg={getWaveHeightColor(forecast.elements.wave_height)}>
+                          <Badge bg={getWaveRiskColor(forecast.elements.wave_height)}>
                             {parseWaveHeight(forecast.elements.wave_height)}
                           </Badge>
                         </div>
@@ -162,7 +150,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
                       <Col xs={12}>
                         <div className="d-flex justify-content-between align-items-center">
                           <span className="small">Wind:</span>
-                          <Badge bg={getWindSpeedColor(forecast.elements.wind)}>
+                          <Badge bg={getWindRiskColor(forecast.elements.wind)}>
                             {parseWindInfo(forecast.elements.wind)}
                           </Badge>
                         </div>

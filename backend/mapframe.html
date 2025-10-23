@@ -80,7 +80,7 @@
         };
         
         const windDirections = {
-            045: "NE", 090: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW", 360: "N"
+            "045": "NE", "090": "E", "135": "SE", "180": "S", "225": "SW", "270": "W", "315": "NW", "360": "N"
         };
         
         function translateWaveHeight(waveString) {
@@ -92,12 +92,11 @@
                 return seaStateCodes[code] || waveString;
             }
             
-            const code1 = parseInt(parts[0].trim());
-            const code2 = parseInt(parts[1].trim());
-            const trans1 = seaStateCodes[code1] || parts[0].trim();
-            const trans2 = seaStateCodes[code2] || parts[1].trim();
+            const code = parseInt(parts[0].trim());
+            const actualHeight = parts[1].trim();
+            const translatedCode = seaStateCodes[code] || parts[0].trim();
             
-            return trans1 + ' / ' + trans2;
+            return translatedCode + ' (' + actualHeight + ' cm)';
         }
         
         function translateWindInfo(windString) {
@@ -112,26 +111,49 @@
             let translatedDirections = directions;
             if (directions.includes('-')) {
                 const dirParts = directions.split('-');
-                const dir1 = parseInt(dirParts[0]);
-                const dir2 = parseInt(dirParts[1]);
+                const dir1 = dirParts[0].padStart(3, '0');
+                const dir2 = dirParts[1].padStart(3, '0');
                 const trans1 = windDirections[dir1] || dirParts[0];
                 const trans2 = windDirections[dir2] || dirParts[1];
                 translatedDirections = trans1 + '-' + trans2;
             } else {
-                const dir = parseInt(directions);
+                const dir = directions.padStart(3, '0');
                 translatedDirections = windDirections[dir] || directions;
             }
             
-            return translatedDirections + ' / ' + speeds + ' kt';
+            return translatedDirections + ' (' + speeds.trim() + ' km/h)';
         }
         
         let mapInstance;
         let stationsData = [];
         let forecastData = [];
         
+        // Weather risk color functions
+        function getWaveRiskColor(waveString) {
+            if (!waveString) return '#6c757d';
+            const code = parseInt(waveString.split(' / ')[0] || waveString);
+            if (code >= 80) return '#dc3545';  // red
+            if (code >= 60) return '#fd7e14';  // orange
+            if (code >= 40) return '#ffc107';  // yellow
+            return '#6c757d';                  // grey
+        }
+        
+        function getWindRiskColor(windString) {
+            if (!windString) return '#6c757d';
+            const speedPart = windString.split('/')[1];
+            if (!speedPart) return '#6c757d';
+            const maxSpeed = Math.max(...speedPart.split('-').map(s => parseInt(s.trim())));
+            if (maxSpeed >= 40) return '#dc3545';  // red
+            if (maxSpeed >= 25) return '#fd7e14';  // orange
+            if (maxSpeed >= 15) return '#ffc107';  // yellow
+            return '#6c757d';                      // grey
+        }
+        
         // Initialize translation functions globally
         window.translateWaveHeight = translateWaveHeight;
         window.translateWindInfo = translateWindInfo;
+        window.getWaveRiskColor = getWaveRiskColor;
+        window.getWindRiskColor = getWindRiskColor;
         
         window.onload = function() {
             // Add delay for Edge browser

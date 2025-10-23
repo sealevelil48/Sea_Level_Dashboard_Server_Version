@@ -80,14 +80,14 @@ export const seaStateCodes = {
 };
 
 export const windDirections = {
-  045: "NE",
-  090: "E", 
-  135: "SE",
-  180: "S",
-  225: "SW",
-  270: "W",
-  315: "NW",
-  360: "N"
+  "045": "NE",
+  "090": "E", 
+  "135": "SE",
+  "180": "S",
+  "225": "SW",
+  "270": "W",
+  "315": "NW",
+  "360": "N"
 };
 
 // Helper functions to translate codes
@@ -102,11 +102,12 @@ export const translateSeaStateCode = (code) => {
 };
 
 export const translateWindDirection = (direction) => {
-  const numDir = parseInt(direction);
-  return windDirections[numDir] || direction;
+  const dirStr = String(direction).padStart(3, '0');
+  return windDirections[dirStr] || direction;
 };
 
 // Parse and translate wind format: "045-135/10-25"
+// First part (045-135) are IMS wind direction codes, second part (10-25) is actual wind speed in kph
 export const parseWindInfo = (windString) => {
   if (!windString || typeof windString !== 'string') return windString;
   
@@ -119,29 +120,56 @@ export const parseWindInfo = (windString) => {
   let translatedDirections = directions;
   if (directions.includes('-')) {
     const [dir1, dir2] = directions.split('-');
-    const trans1 = translateWindDirection(dir1);
-    const trans2 = translateWindDirection(dir2);
+    const trans1 = translateWindDirection(dir1.padStart(3, '0'));
+    const trans2 = translateWindDirection(dir2.padStart(3, '0'));
     translatedDirections = `${trans1}-${trans2}`;
   } else {
-    translatedDirections = translateWindDirection(directions);
+    translatedDirections = translateWindDirection(directions.padStart(3, '0'));
   }
   
-  return `${translatedDirections} / ${speeds} kt`;
+  return `${translatedDirections} (${speeds.trim()} km/h)`;
 };
 
 // Parse wave height format: "50 / 50-100" 
+// First part (50) is IMS sea state code, second part (50-100) is actual wave height in cm
 export const parseWaveHeight = (waveString) => {
   if (!waveString || typeof waveString !== 'string') return waveString;
   
   const parts = waveString.split(' / ');
   if (parts.length !== 2) {
-    // Single code
+    // Single code - translate it
     return translateSeaStateCode(waveString.trim());
   }
   
-  const [code1, code2] = parts;
-  const trans1 = translateSeaStateCode(code1.trim());
-  const trans2 = translateSeaStateCode(code2.trim());
+  const [code, actualHeight] = parts;
+  const translatedCode = translateSeaStateCode(code.trim());
   
-  return `${trans1} / ${trans2}`;
+  return `${translatedCode} (${actualHeight.trim()} cm)`;
+};
+
+// Get weather risk color based on sea state code
+export const getWaveRiskColor = (waveString) => {
+  if (!waveString) return 'secondary';
+  
+  const code = parseInt(waveString.split(' / ')[0] || waveString);
+  
+  if (code >= 80) return 'danger';     // Severe Risk - red
+  if (code >= 60) return 'warning';    // Significant Risk - orange  
+  if (code >= 40) return 'warning';    // Risk - yellow
+  return 'secondary';                  // No significant weather - grey
+};
+
+// Get wind risk color based on wind speed
+export const getWindRiskColor = (windString) => {
+  if (!windString) return 'secondary';
+  
+  const speedPart = windString.split('/')[1];
+  if (!speedPart) return 'secondary';
+  
+  const maxSpeed = Math.max(...speedPart.split('-').map(s => parseInt(s.trim())));
+  
+  if (maxSpeed >= 40) return 'danger';     // Severe Risk - red
+  if (maxSpeed >= 25) return 'warning';    // Significant Risk - orange
+  if (maxSpeed >= 15) return 'warning';    // Risk - yellow  
+  return 'secondary';                      // No significant weather - grey
 };
