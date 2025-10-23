@@ -376,29 +376,65 @@ async def get_live_data(station: Optional[str] = None):
 
 @app.get("/api/predictions")
 async def get_predictions(
-    stations: str = "Acre",
+    stations: Optional[str] = None,
+    station: Optional[str] = None,
     model: str = "kalman",
-    forecast_hours: int = 72
+    steps: int = 240,
+    forecast_hours: Optional[int] = None
 ):
-    """Get predictions"""
+    """Get predictions for stations - supports multiple stations and models"""
     try:
+        # Support both 'stations' and 'station' parameters
+        station_param = stations or station
+        
+        if not station_param:
+            return JSONResponse(
+                content={"error": "Station parameter is required"},
+                status_code=400
+            )
+        
+        # Support both 'steps' and 'forecast_hours' parameters
+        steps_param = steps if forecast_hours is None else forecast_hours
+        
+        logger.info(f"[API] Predictions request: stations={station_param}, model={model}, steps={steps_param}")
+        
         event = {
             "httpMethod": "GET",
             "path": "/predictions",
             "queryStringParameters": {
-                "stations": stations,
+                "stations": station_param,
+                "station": station_param,
                 "model": model,
-                "forecast_hours": str(forecast_hours)
+                "steps": str(steps_param)
             }
         }
+        
         response = get_predictions_handler(event, None)
-        return lambda_to_fastapi_response(response)
+        result = lambda_to_fastapi_response(response)
+        
+        logger.info(f"[API] Predictions returned successfully for {station_param}")
+        return result
+        
     except Exception as e:
         logger.error(f"Error in get_predictions: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return JSONResponse(
             content={"error": str(e)},
             status_code=500
         )
+
+@app.options("/api/predictions")
+async def predictions_options():
+    """Handle CORS preflight for predictions"""
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
+        }
+    )
 
 @app.get("/api/sea-forecast")
 async def get_sea_forecast():

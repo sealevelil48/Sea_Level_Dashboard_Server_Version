@@ -185,13 +185,39 @@ function Dashboard() {
         steps: filters.forecastHours.toString()
       });
 
-      const response = await fetch(`${API_BASE_URL}/predictions?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setPredictions(data);
+      console.log('Fetching predictions:', {
+        url: `${API_BASE_URL}/api/predictions?${params}`,
+        stations: stationParam,
+        models: modelParam,
+        steps: filters.forecastHours
+      });
+
+      // CRITICAL FIX: Add /api/ prefix
+      const response = await fetch(`${API_BASE_URL}/api/predictions?${params}`);
+      
+      console.log('Prediction response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        // Check if we got HTML instead of JSON
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
+          throw new Error(`Received HTML instead of JSON. Check if backend route is /api/predictions`);
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+      
+      const data = await response.json();
+      console.log('Predictions received successfully:', Object.keys(data));
+      setPredictions(data);
     } catch (error) {
       console.error('Error fetching predictions:', error);
+      console.error('Error details:', {
+        message: error.message,
+        url: `${API_BASE_URL}/api/predictions`,
+        stations,
+        models: filters.predictionModels,
+        forecastHours: filters.forecastHours
+      });
       setPredictions({});
     }
   }, [filters.predictionModels, filters.forecastHours]);
@@ -450,10 +476,14 @@ function Dashboard() {
         !selectedStations.includes('All Stations')) {
       const stationsToPredict = selectedStations.filter(s => s !== 'All Stations').slice(0, 3);
       if (stationsToPredict.length > 0) {
+        console.log(`Fetching predictions for ${stationsToPredict.join(', ')} with ${filters.forecastHours} hour forecast`);
         fetchPredictions(stationsToPredict);
       }
+    } else {
+      // Clear predictions when no models selected
+      setPredictions({});
     }
-  }, [filters.predictionModels, selectedStations, fetchPredictions]);
+  }, [filters.predictionModels, filters.forecastHours, selectedStations, fetchPredictions]);
 
   // Handle station selection (support multi-select up to 3)
   const handleStationChange = (value) => {
@@ -977,18 +1007,7 @@ function Dashboard() {
                   />
                 </Form.Group>
 
-                <Form.Group className="mb-2">
-                  <Form.Label className="small mb-1">Forecast Period</Form.Label>
-                  <CustomDropdown
-                    value={filters.forecastHours}
-                    onChange={(value) => handleFilterChange('forecastHours', parseInt(value))}
-                    options={[
-                      { value: '24', label: '24H' },
-                      { value: '48', label: '48H' },
-                      { value: '72', label: '72H' }
-                    ]}
-                  />
-                </Form.Group>
+
 
                 <Form.Group className="mb-2">
                   <Form.Check
@@ -1039,6 +1058,27 @@ function Dashboard() {
                     </small>
                   )}
                 </Form.Group>
+
+                {/* Forecast Period */}
+                {filters.predictionModels.length > 0 && (
+                  <Form.Group className="mb-2">
+                    <Form.Label className="small mb-1">Forecast Period</Form.Label>
+                    <Form.Select
+                      size="sm"
+                      value={filters.forecastHours}
+                      onChange={(e) => handleFilterChange('forecastHours', parseInt(e.target.value))}
+                    >
+                      <option value={24}>24 Hours</option>
+                      <option value={48}>48 Hours (2 Days)</option>
+                      <option value={72}>72 Hours (3 Days)</option>
+                      <option value={168}>1 Week</option>
+                      <option value={336}>2 Weeks</option>
+                    </Form.Select>
+                    <small className="text-muted d-block mt-1">
+                      Current: {filters.forecastHours} hours
+                    </small>
+                  </Form.Group>
+                )}
 
                 <Row className="mt-2">
                   <Col>
