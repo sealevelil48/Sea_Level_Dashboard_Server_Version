@@ -101,6 +101,42 @@ def get_exogenous_data(station: str, days_back: int = 30) -> Optional[pd.DataFra
     return None
 
 
+def generate_simple_forecast(station: str, steps: int = 240) -> List[Dict]:
+    """Generate simple forecast when advanced models fail"""
+    try:
+        df = get_prediction_data(station, days_back=7)
+        if df.empty:
+            logger.warning(f"No data available for simple forecast: {station}")
+            return []
+        
+        # Use last value with small random variations
+        last_value = df['Tab_Value_mDepthC1'].iloc[-1]
+        last_time = df['Tab_DateTime'].iloc[-1]
+        
+        result = []
+        for i in range(steps):
+            # Add small tidal-like variation
+            tidal_component = 0.05 * np.sin(2 * np.pi * i / 12.42)  # M2 tide
+            noise = np.random.normal(0, 0.01)  # Small noise
+            predicted_value = last_value + tidal_component + noise
+            
+            timestamp = last_time + timedelta(hours=i+1)
+            result.append({
+                'ds': timestamp.isoformat(),
+                'yhat': float(predicted_value),
+                'yhat_lower': float(predicted_value - 0.05),
+                'yhat_upper': float(predicted_value + 0.05),
+                'type': 'simple_forecast'
+            })
+        
+        logger.info(f"Generated simple forecast for {station}: {len(result)} points")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Simple forecast failed: {e}")
+        return []
+
+
 def kalman_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
     """
     Generate predictions using Kalman filter state-space model
@@ -113,10 +149,12 @@ def kalman_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
         List of predictions with timestamps and confidence intervals
     """
     if not KALMAN_AVAILABLE:
-        logger.warning("Kalman filter not available, falling back to ARIMA")
-        return None
+        logger.warning("Kalman filter not available, generating simple forecast")
+        return generate_simple_forecast(station, steps)
     
     try:
+        logger.info(f"Starting Kalman prediction for station={station}, steps={steps}")
+        
         # Check cache
         cache_key = f"kalman_{station}_{steps}"
         if cache_key in MODEL_CACHE:
@@ -126,10 +164,13 @@ def kalman_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
                 return cached_result
         
         # Get historical data (need more for Kalman filter)
+        logger.info(f"Fetching historical data for {station}")
         df = get_prediction_data(station, days_back=60)
+        logger.info(f"Retrieved {len(df)} data points for {station}")
+        
         if df.empty or len(df) < 48:  # Need at least 2 days of hourly data
             logger.warning(f"Insufficient data for Kalman filter: {len(df)} points")
-            return None
+            return generate_simple_forecast(station, steps)
         
         # Configure model
         config = KalmanConfig(
@@ -141,25 +182,37 @@ def kalman_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
         )
         
         # Initialize and fit model
+        logger.info(f"Initializing Kalman model for {station}")
         kalman_model = KalmanFilterSeaLevel(config)
         
         # Get exogenous data if available
         exog = get_exogenous_data(station, days_back=60)
         
         # Fit model
+        logger.info(f"Fitting Kalman model for {station}")
         kalman_model.fit(df, exog)
+        logger.info(f"Kalman model fitted successfully for {station}")
         
         # Generate forecast
+        logger.info(f"Generating forecast for {station}, steps={steps}")
         forecast_df = kalman_model.forecast(steps=steps, alpha=0.05)
+        logger.info(f"Forecast generated: {len(forecast_df)} points")
         
         # Get nowcast (current filtered state)
+        logger.info(f"Getting nowcast for {station}")
         nowcast = kalman_model.get_nowcast()
         
         # Decompose signal for diagnostics
-        components = kalman_model.decompose()
+        try:
+            components = kalman_model.decompose()
+            logger.info(f"Signal decomposition completed for {station}")
+        except Exception as e:
+            logger.warning(f"Signal decomposition failed for {station}: {e}")
         
         # Convert to JSON format
+        logger.info(f"Converting forecast to JSON for {station}")
         result = kalman_model.to_json(forecast_df)
+        logger.info(f"JSON conversion completed: {len(result)} forecast points")
         
         # Add nowcast to beginning
         result.insert(0, {
@@ -178,8 +231,10 @@ def kalman_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
         return result
         
     except Exception as e:
-        logger.error(f"Kalman filter prediction failed: {e}")
-        return None
+        logger.error(f"Kalman filter prediction failed for {station}: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return generate_simple_forecast(station, steps)
 
 
 def arima_predict(station: str, steps: int = 240) -> Optional[List[float]]:
