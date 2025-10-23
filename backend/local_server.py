@@ -475,7 +475,7 @@ async def get_mariners_forecast():
         import requests
         
         logger.info("Fetching mariners forecast from IMS...")
-        url = "https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_sea.xml"
+        url = "https://ims.gov.il/sites/default/files/ims_data/xml_files/medit_sea.xml"
         response = requests.get(url, timeout=10)
         
         if response.status_code != 200:
@@ -544,6 +544,23 @@ async def get_mariners_forecast():
     except Exception as e:
         logger.error(f"Error in mariners forecast: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching mariners forecast: {str(e)}")
+
+@app.options("/api/mariners-forecast")
+async def mariners_forecast_options():
+    """Handle CORS preflight for mariners forecast"""
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
+        }
+    )
+
+@app.head("/api/mariners-forecast")
+async def mariners_forecast_head():
+    """Handle HEAD requests for mariners forecast"""
+    return JSONResponse(content={}, headers={"Content-Type": "application/json"})
 
 @app.get("/api/mariners-mapframe")
 async def mariners_mapframe():
