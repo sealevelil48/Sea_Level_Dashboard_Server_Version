@@ -74,6 +74,7 @@ try:
     from lambdas.get_live_data.main import lambda_handler as get_live_data_handler
     from lambdas.get_predictions.main import lambda_handler as get_predictions_handler
     from lambdas.get_sea_forecast.main import lambda_handler as get_sea_forecast_handler
+    from lambdas.get_ims_warnings.main import lambda_handler as get_ims_warnings_handler
     logger.info("[OK] Lambda handlers imported successfully")
 except ImportError as e:
     logger.error(f"[ERROR] Failed to import Lambda handlers: {e}")
@@ -89,6 +90,7 @@ except ImportError as e:
     get_live_data_handler = dummy_handler
     get_predictions_handler = dummy_handler
     get_sea_forecast_handler = dummy_handler
+    get_ims_warnings_handler = dummy_handler
 
 # Global variable for frontend process
 frontend_process: Optional[subprocess.Popen] = None
@@ -447,6 +449,20 @@ async def get_sea_forecast():
         logger.error(f"Error in get_sea_forecast: {e}")
         return JSONResponse(
             content={"error": str(e), "forecast": []},
+            status_code=500
+        )
+
+@app.get("/api/ims-warnings")
+async def get_ims_warnings():
+    """Get IMS weather warnings"""
+    try:
+        event = {"httpMethod": "GET", "path": "/ims-warnings", "queryStringParameters": {}}
+        response = get_ims_warnings_handler(event, None)
+        return lambda_to_fastapi_response(response)
+    except Exception as e:
+        logger.error(f"Error in get_ims_warnings: {e}")
+        return JSONResponse(
+            content={"error": str(e), "warnings": []},
             status_code=500
         )
 
