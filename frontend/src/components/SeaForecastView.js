@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Badge, Spinner, Button } from 'react-bootstrap';
+import { parseWaveHeight, parseWindInfo } from '../utils/imsCodeTranslations';
 
 const SeaForecastView = ({ apiBaseUrl }) => {
   const [forecastData, setForecastData] = useState(null);
@@ -144,7 +145,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
                         <div className="d-flex justify-content-between align-items-center">
                           <span className="small">Wave Height:</span>
                           <Badge bg={getWaveHeightColor(forecast.elements.wave_height)}>
-                            {forecast.elements.wave_height}
+                            {parseWaveHeight(forecast.elements.wave_height)}
                           </Badge>
                         </div>
                       </Col>
@@ -162,7 +163,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
                         <div className="d-flex justify-content-between align-items-center">
                           <span className="small">Wind:</span>
                           <Badge bg={getWindSpeedColor(forecast.elements.wind)}>
-                            {forecast.elements.wind}
+                            {parseWindInfo(forecast.elements.wind)}
                           </Badge>
                         </div>
                       </Col>

@@ -71,9 +71,67 @@
             document.getElementById('map').style.display = 'block';
         }
         
+        // IMS Code Translation Functions
+        const seaStateCodes = {
+            10: "Calm", 20: "Rippled", 30: "Smooth", 40: "Smooth to slight", 50: "Slight",
+            55: "Slight to moderate", 60: "Moderate", 70: "Moderate to rough", 80: "Rough",
+            90: "Rough to very rough", 110: "Very rough", 120: "Very rough to high",
+            130: "High", 140: "High to very high", 150: "Very high", 160: "Phenomenal"
+        };
+        
+        const windDirections = {
+            045: "NE", 090: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW", 360: "N"
+        };
+        
+        function translateWaveHeight(waveString) {
+            if (!waveString || typeof waveString !== 'string') return waveString;
+            
+            const parts = waveString.split(' / ');
+            if (parts.length !== 2) {
+                const code = parseInt(waveString.trim());
+                return seaStateCodes[code] || waveString;
+            }
+            
+            const code1 = parseInt(parts[0].trim());
+            const code2 = parseInt(parts[1].trim());
+            const trans1 = seaStateCodes[code1] || parts[0].trim();
+            const trans2 = seaStateCodes[code2] || parts[1].trim();
+            
+            return trans1 + ' / ' + trans2;
+        }
+        
+        function translateWindInfo(windString) {
+            if (!windString || typeof windString !== 'string') return windString;
+            
+            const parts = windString.split('/');
+            if (parts.length !== 2) return windString;
+            
+            const directions = parts[0];
+            const speeds = parts[1];
+            
+            let translatedDirections = directions;
+            if (directions.includes('-')) {
+                const dirParts = directions.split('-');
+                const dir1 = parseInt(dirParts[0]);
+                const dir2 = parseInt(dirParts[1]);
+                const trans1 = windDirections[dir1] || dirParts[0];
+                const trans2 = windDirections[dir2] || dirParts[1];
+                translatedDirections = trans1 + '-' + trans2;
+            } else {
+                const dir = parseInt(directions);
+                translatedDirections = windDirections[dir] || directions;
+            }
+            
+            return translatedDirections + ' / ' + speeds + ' kt';
+        }
+        
         let mapInstance;
         let stationsData = [];
         let forecastData = [];
+        
+        // Initialize translation functions globally
+        window.translateWaveHeight = translateWaveHeight;
+        window.translateWindInfo = translateWindInfo;
         
         window.onload = function() {
             // Add delay for Edge browser
@@ -126,11 +184,14 @@
                             const currentForecast = matchingForecast.forecasts[0];
                             tooltips.push(`${station.Station} - Combined Data`);
                             
+                            const waveHeight = translateWaveHeight(currentForecast?.elements?.wave_height || 'N/A');
+                            const windInfo = translateWindInfo(currentForecast?.elements?.wind || 'N/A');
+                            
                             const forecastHTML = `<hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
                                 <h4 style="margin: 0 0 10px 0; color: #ff8c00;">${forecastLocation}</h4>
-                                <div><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</div>
+                                <div><strong>Wave Height:</strong> ${waveHeight}</div>
                                 <div><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</div>
-                                <div><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</div>
+                                <div><strong>Wind:</strong> ${windInfo}</div>
                                 <div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;">
                                     <strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}
                                 </div>
@@ -169,12 +230,15 @@
                         });
                         
                         const currentForecast = seaOfGalilee.forecasts[0];
+                        const waveHeight = translateWaveHeight(currentForecast?.elements?.wave_height || 'N/A');
+                        const windInfo = translateWindInfo(currentForecast?.elements?.wind || 'N/A');
+                        
                         tooltips.push(`${seaOfGalilee.name_eng} - Wave Forecast`);
                         bubbleHTMLParameters.push([
                             seaOfGalilee.name_eng,
-                            `<strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}`,
+                            `<strong>Wave Height:</strong> ${waveHeight}`,
                             `<strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C`,
-                            `<strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div><div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://ims.gov.il/he/coasts" target="_parent" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div>`
+                            `<strong>Wind:</strong> ${windInfo}<div style="font-size: 12px; color: #7f8c8d; margin-top: 10px;"><strong>Forecast Period:</strong><br>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</div><div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://ims.gov.il/he/coasts" target="_parent" style="color: #666; text-decoration: none;">IMS Forecast ©</a></div>`
                         ]);
                     }
                     
