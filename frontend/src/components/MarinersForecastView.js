@@ -44,14 +44,29 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     try {
       setLoading(true);
       setError(null);
+      console.log('Fetching mariners forecast from:', `${apiBaseUrl}/api/mariners-forecast`);
       const response = await fetch(`${apiBaseUrl}/api/mariners-forecast`);
-      if (response.ok) {
-        const data = await response.json();
-        setForecastData(data);
-      } else {
-        setError(`Failed to fetch mariners forecast: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Mariners forecast error response:', errorText);
+        setError(`Failed to fetch mariners forecast: ${response.status} - ${errorText}`);
+        return;
       }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Expected JSON but got:', contentType, responseText.substring(0, 200));
+        setError('Server returned non-JSON response');
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('Mariners forecast data received:', data);
+      setForecastData(data);
     } catch (err) {
+      console.error('Mariners forecast fetch error:', err);
       setError(err.message);
     } finally {
       setLoading(false);

@@ -474,71 +474,86 @@ async def get_mariners_forecast():
         import xml.etree.ElementTree as ET
         import requests
         
+        logger.info("Fetching mariners forecast from IMS...")
         url = "https://ims.gov.il/sites/default/files/ims_data/xml_files/isr_sea.xml"
         response = requests.get(url, timeout=10)
         
+        if response.status_code != 200:
+            logger.error(f"IMS returned status {response.status_code}")
+            raise HTTPException(status_code=500, detail=f"IMS API returned {response.status_code}")
+        
+        logger.info(f"IMS response length: {len(response.content)} bytes")
+        
         # Try different encodings
+        content = None
         for encoding in ['iso-8859-1', 'utf-8', 'windows-1255']:
             try:
                 content = response.content.decode(encoding)
+                logger.info(f"Successfully decoded with {encoding}")
                 break
             except UnicodeDecodeError:
                 continue
+        
+        if not content:
+            raise HTTPException(status_code=500, detail="Failed to decode XML content")
         
         root = ET.fromstring(content)
         
         # Parse metadata
         metadata = {
-            'organization': root.find('.//organization').text if root.find('.//organization') is not None else '',
-            'title': root.find('.//title').text if root.find('.//title') is not None else '',
-            'issue_datetime': root.find('.//issue_datetime').text if root.find('.//issue_datetime') is not None else ''
+            'organization': root.find('.//Organization').text if root.find('.//Organization') is not None else '',
+            'title': root.find('.//Title').text if root.find('.//Title') is not None else '',
+            'issue_datetime': root.find('.//IssueDateTime').text if root.find('.//IssueDateTime') is not None else ''
         }
         
         # Parse locations
         locations = []
-        for location in root.findall('.//location'):
+        for location in root.findall('.//Location'):
+            location_meta = location.find('LocationMetaData')
             location_data = {
-                'id': location.get('id', ''),
-                'name_eng': location.get('name_eng', ''),
-                'name_heb': location.get('name_heb', ''),
+                'id': location_meta.find('LocationId').text if location_meta.find('LocationId') is not None else '',
+                'name_eng': location_meta.find('LocationNameEng').text if location_meta.find('LocationNameEng') is not None else '',
+                'name_heb': location_meta.find('LocationNameHeb').text if location_meta.find('LocationNameHeb') is not None else '',
                 'forecasts': []
             }
             
-            for time_period in location.findall('.//time_period'):
-                forecast = {
-                    'from': time_period.get('from', ''),
-                    'to': time_period.get('to', ''),
-                    'elements': {}
-                }
-                
-                for element in time_period.findall('.//element'):
-                    element_name = element.get('name', '')
-                    element_value = element.text or ''
-                    forecast['elements'][element_name] = element_value
-                
-                location_data['forecasts'].append(forecast)
+            location_forecast_data = location.find('LocationData')
+            if location_forecast_data is not None:
+                for time_unit in location_forecast_data.findall('TimeUnitData'):
+                    forecast = {
+                        'from': time_unit.find('DateTimeFrom').text if time_unit.find('DateTimeFrom') is not None else '',
+                        'to': time_unit.find('DateTimeTo').text if time_unit.find('DateTimeTo') is not None else '',
+                        'elements': {}
+                    }
+                    
+                    for element in time_unit.findall('Element'):
+                        element_name = element.find('ElementName').text if element.find('ElementName') is not None else ''
+                        element_value = element.find('ElementValue').text if element.find('ElementValue') is not None else ''
+                        forecast['elements'][element_name] = element_value
+                    
+                    location_data['forecasts'].append(forecast)
             
             locations.append(location_data)
         
+        logger.info(f"Successfully parsed {len(locations)} locations with metadata: {metadata}")
         return {
             'metadata': metadata,
             'locations': locations
         }
         
     except Exception as e:
-        logger.error(f"Error fetching mariners forecast: {e}")
-        return JSONResponse(
-            content={"error": f"Error fetching mariners forecast: {str(e)}"},
-            status_code=500
-        )
+        logger.error(f"Error in mariners forecast: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching mariners forecast: {str(e)}")
 
 @app.get("/api/mariners-mapframe")
 async def mariners_mapframe():
     """Serve the mariners forecast map iframe"""
     mapframe_path = backend_root / "mariners_mapframe.html"
+    logger.info(f"Looking for mariners mapframe at: {mapframe_path}")
     if mapframe_path.exists():
         return FileResponse(str(mapframe_path), media_type="text/html")
-    return JSONResponse(content={"error": "Mariners mapframe not found"}, status_code=404)
+    logger.error(f"Mariners mapframe not found at {mapframe_path}")
+    raise HTTPException(status_code=404, detail="Mariners mapframe not found")
 
 @app.get("/api/stations/map")
 async def get_api_stations_map(end_date: Optional[str] = None):
