@@ -905,7 +905,21 @@ function Dashboard() {
         {/* Header */}
         <div className="header">
           <h1 className="navbar-brand">
-            <img src="/assets/Mapi_Logo2.png" alt="Mapi Logo" style={{height: '40px', marginRight: '10px'}} />
+            <img 
+              src="/assets/Mapi_Logo2.png" 
+              alt="Survey of Israel Logo" 
+              title="Click to refresh dashboard"
+              onClick={() => window.location.reload()}
+              style={{
+                height: '40px', 
+                marginRight: '10px',
+                cursor: 'pointer',
+                transition: 'opacity 0.2s ease',
+                opacity: 1
+              }}
+              onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+              onMouseLeave={(e) => e.target.style.opacity = '1'}
+            />
             Sea Level Monitoring Dashboard
           </h1>
           <div id="current-time">{currentTime.toLocaleString()}</div>
