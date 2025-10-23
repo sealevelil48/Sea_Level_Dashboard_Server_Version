@@ -7,6 +7,7 @@ import ErrorBoundary from './ErrorBoundary';
 import DateRangePicker from './DateRangePicker';
 import CustomDropdown from './CustomDropdown';
 import StatsCard from './StatsCard';
+import WarningsCard from './WarningsCard';
 import { useFavorites } from '../hooks/useFavorites';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { formatDateTime, isValidDate } from '../utils/dateUtils';
@@ -1126,14 +1127,14 @@ function Dashboard() {
           <Col xs={12} lg={9} xl={10}>
             {/* Stats Cards */}
             <Row className="mb-3">
-              <Col md={3}>
+              <Col lg={2} md={4} sm={6}>
                 <StatsCard 
                   title="Current Level" 
                   value={stats.current_level.toFixed(3)} 
                   suffix="m" 
                 />
               </Col>
-              <Col md={3}>
+              <Col lg={2} md={4} sm={6}>
                 <StatsCard 
                   title="24h Change" 
                   value={`${stats['24h_change'] >= 0 ? '+' : ''}${stats['24h_change'].toFixed(3)}`} 
@@ -1141,18 +1142,26 @@ function Dashboard() {
                   color={stats['24h_change'] >= 0 ? 'green' : 'red'}
                 />
               </Col>
-              <Col md={3}>
+              <Col lg={2} md={4} sm={6}>
                 <StatsCard 
                   title="Avg. Temp" 
                   value={stats.avg_temp.toFixed(1)} 
                   suffix="°C" 
                 />
               </Col>
-              <Col md={3}>
+              <Col lg={2} md={4} sm={6}>
                 <StatsCard 
                   title="Anomalies" 
                   value={stats.anomalies} 
                 />
+              </Col>
+              <Col lg={4} md={8} sm={12}>
+                <div className="stats-card h-100">
+                  <div className="card-body p-3">
+                    <h6 className="card-title mb-2">🚨 IMS Warnings</h6>
+                    <WarningsCard apiBaseUrl={API_BASE_URL} />
+                  </div>
+                </div>
               </Col>
             </Row>
 
