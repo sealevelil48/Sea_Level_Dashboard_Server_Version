@@ -1,36 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Button, Spinner, Tabs, Tab, Table } from 'react-bootstrap';
+import { translateWeatherCode as utilTranslateWeatherCode, parseWaveHeight, parseWindInfo } from '../utils/imsCodeTranslations';
 
 const translateWind = (windStr) => {
-  if (!windStr) return windStr;
-  const parts = windStr.split('/');
-  if (parts.length !== 2) return windStr;
-  const directions = {"045": "NE", "135": "SE", "225": "SW", "315": "NW", "180": "S", "000": "N", "090": "E", "270": "W"};
-  const dirPart = parts[0].trim();
-  let dirText = dirPart;
-  if (dirPart.includes('-')) {
-    const [start, end] = dirPart.split('-');
-    dirText = `${directions[start] || start}-${directions[end] || end}`;
-  } else {
-    dirText = directions[dirPart] || dirPart;
-  }
-  return `${dirText} (${parts[1].trim()} km/h)`;
+  return parseWindInfo(windStr);
 };
 
 const translateWeatherCode = (code) => {
-  const codes = {"1220": "Partly Cloudy", "1250": "Mostly Cloudy", "1000": "Clear", "4001": "Rain", "8000": "Thunderstorm"};
-  return codes[code] || code;
+  return utilTranslateWeatherCode(code);
 };
 
 const translateSeaStatus = (seaStr) => {
-  if (!seaStr) return seaStr;
-  const parts = seaStr.split(' / ');
-  if (parts.length !== 2) return seaStr;
-  const code = parts[0].trim();
-  const height = parts[1].trim();
-  const seaCodes = {"10": "Calm", "20": "Smooth", "30": "Slight", "40": "Light", "50": "Slight", "60": "Moderate", "70": "Rough", "80": "Very Rough", "90": "High", "95": "Very High"};
-  const description = seaCodes[code] || code;
-  return `${description} (${height} cm)`;
+  return parseWaveHeight(seaStr);
 };
 
 const MarinersForecastView = ({ apiBaseUrl }) => {

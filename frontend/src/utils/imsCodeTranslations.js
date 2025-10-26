@@ -29,20 +29,20 @@ export const weatherCodes = {
   
   // World Weather Codes
   1030: "Hail",
-  1040: "Blizzard",
-  1050: "Snow Showers",
-  1090: "Heavy Showers",
-  1100: "Scattered Showers",
+  1040: "Blowing Snow, Blizzard, Snowdrift, Snowstorm",
+  1050: "Snow Showers, Flurries",
+  1090: "Showers, Heavy Showers",
+  1100: "Occasional Showers, Scattered Showers",
   1110: "Isolated Showers",
   1120: "Light Showers",
   1130: "Freezing Rain",
-  1150: "Drizzle",
+  1150: "Drizzle, Light Rain",
   1170: "Mist",
   1180: "Smoke",
   1190: "Haze",
   1200: "Overcast",
-  1210: "Sunny Interval",
-  1240: "Bright",
+  1210: "Sunny Interval, No Rain, Clearing",
+  1240: "Bright, Sunny, Fair",
   1280: "Dry",
   1290: "Freezing",
   1330: "Warming",
@@ -80,6 +80,7 @@ export const seaStateCodes = {
 };
 
 export const windDirections = {
+  "000": "N",
   "045": "NE",
   "090": "E", 
   "135": "SE",
