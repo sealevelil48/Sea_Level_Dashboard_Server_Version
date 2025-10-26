@@ -72,7 +72,7 @@ const WarningsCard = ({ apiBaseUrl }) => {
         <div 
           className="warning-message" 
           style={{ 
-            height: '60px', 
+            minHeight: '80px', 
             overflow: 'hidden',
             transition: 'transform 0.5s ease-in-out'
           }}
@@ -84,6 +84,11 @@ const WarningsCard = ({ apiBaseUrl }) => {
           ) : (
             <div className="small" style={{ color }}>
               <strong>{currentWarning.title}</strong>
+              {currentWarning.description && (
+                <div className="mt-1" style={{ fontSize: '0.8em', lineHeight: '1.2' }}>
+                  {currentWarning.description}
+                </div>
+              )}
               <div className="text-muted mt-1">
                 {new Date(currentWarning.pub_date).toLocaleDateString('en-US', {
                   month: 'short',

@@ -3,6 +3,7 @@ import logging
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +25,14 @@ def lambda_handler(event, context):
             pub_date = item.find('pubDate')
             
             if title is not None:
+                # Clean description by removing HTML tags
+                desc_text = ''
+                if description is not None and description.text:
+                    desc_text = re.sub(r'<[^>]+>', '', description.text).strip()
+                
                 warning = {
                     'title': title.text.strip(),
-                    'description': description.text.strip() if description is not None else '',
+                    'description': desc_text,
                     'pub_date': pub_date.text.strip() if pub_date is not None else '',
                     'severity': get_warning_severity(title.text)
                 }
