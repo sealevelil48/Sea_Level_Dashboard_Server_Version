@@ -22,14 +22,14 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const WIND_DIRECTION_CODES = {
-            "000": "N", "045": "NE", "090": "E", "135": "SE",
-            "180": "S", "225": "SW", "270": "W", "315": "NW", "360": "N"
+            '000': 'N', '045': 'NE', '090': 'E', '135': 'SE',
+            '180': 'S', '225': 'SW', '270': 'W', '315': 'NW', '360': 'N'
         };
         
         const WEATHER_CODES = {
-            "1000": "Clear", "1100": "Mostly Clear", "1200": "Partly Cloudy",
-            "1220": "Partly Cloudy", "1250": "Mostly Cloudy", "1300": "Cloudy",
-            "2000": "Fog", "4001": "Rain", "5000": "Snow", "8000": "Thunderstorm"
+            '1000': 'Clear', '1100': 'Mostly Clear', '1200': 'Partly Cloudy',
+            '1220': 'Partly Cloudy', '1250': 'Mostly Cloudy', '1300': 'Cloudy',
+            '2000': 'Fog', '4001': 'Rain', '5000': 'Snow', '8000': 'Thunderstorm'
         };
         
         function translateWind(windStr) {
@@ -64,7 +64,7 @@
             if (parts.length !== 2) return seaStr;
             const code = parts[0].trim();
             const height = parts[1].trim();
-            const seaCodes = {"10": "Calm", "20": "Smooth", "30": "Slight", "40": "Light", "50": "Slight", "60": "Moderate", "70": "Rough", "80": "Very Rough", "90": "High", "95": "Very High"};
+            const seaCodes = {'10': 'Calm', '20': 'Smooth', '30': 'Slight', '40': 'Light', '50': 'Slight', '60': 'Moderate', '70': 'Rough', '80': 'Very Rough', '90': 'High', '95': 'Very High'};
             const description = seaCodes[code] || code;
             return `${description} (${height} cm)`;
         }
@@ -76,9 +76,9 @@
         }).addTo(map);
         
         const locationCoords = {
-            'Delta': [32.5, 29.5],
-            'SouthEast Kritiko': [34.7, 25.9],
-            'Crusade': [32.7, 34.5]
+            'Delta': [32.5, 29.5],  // Deeper in Mediterranean towards Antalya
+            'SouthEast Kritiko': [34.7, 25.9],  // Off Southeast Crete
+            'Crusade': [32.7, 34.5]  // More to the left, off Cyprus coast
         };
         
         async function fetchMarinersData() {
