@@ -536,6 +536,8 @@ async def get_mariners_forecast():
             locations.append(location_data)
         
         logger.info(f"Successfully parsed {len(locations)} locations with metadata: {metadata}")
+        for loc in locations:
+            logger.info(f"Location: {loc['name_eng']} ({loc['name_heb']}) - {len(loc['forecasts'])} forecasts")
         return {
             'metadata': metadata,
             'locations': locations
@@ -561,6 +563,94 @@ async def mariners_forecast_options():
 async def mariners_forecast_head():
     """Handle HEAD requests for mariners forecast"""
     return JSONResponse(content={}, headers={"Content-Type": "application/json"})
+
+@app.get("/api/mariners-forecast-direct")
+async def get_mariners_forecast_direct():
+    """Get mariners forecast from IMS - direct endpoint"""
+    try:
+        import xml.etree.ElementTree as ET
+        import requests
+        
+        logger.info("Fetching mariners forecast from IMS...")
+        url = "https://ims.gov.il/sites/default/files/ims_data/xml_files/medit_sea.xml"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code != 200:
+            logger.error(f"IMS returned status {response.status_code}")
+            raise HTTPException(status_code=500, detail=f"IMS API returned {response.status_code}")
+        
+        logger.info(f"IMS response length: {len(response.content)} bytes")
+        
+        # Try different encodings
+        content = None
+        for encoding in ['iso-8859-1', 'utf-8', 'windows-1255']:
+            try:
+                content = response.content.decode(encoding)
+                logger.info(f"Successfully decoded with {encoding}")
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if not content:
+            raise HTTPException(status_code=500, detail="Failed to decode XML content")
+        
+        root = ET.fromstring(content)
+        
+        # Parse metadata
+        metadata = {
+            'organization': root.find('.//Organization').text if root.find('.//Organization') is not None else '',
+            'title': root.find('.//Title').text if root.find('.//Title') is not None else '',
+            'issue_datetime': root.find('.//IssueDateTime').text if root.find('.//IssueDateTime') is not None else ''
+        }
+        
+        # Parse locations
+        locations = []
+        for location in root.findall('.//Location'):
+            location_meta = location.find('LocationMetaData')
+            location_data = {
+                'id': location_meta.find('LocationId').text if location_meta.find('LocationId') is not None else '',
+                'name_eng': location_meta.find('LocationNameEng').text if location_meta.find('LocationNameEng') is not None else '',
+                'name_heb': location_meta.find('LocationNameHeb').text if location_meta.find('LocationNameHeb') is not None else '',
+                'forecasts': []
+            }
+            
+            location_forecast_data = location.find('LocationData')
+            if location_forecast_data is not None:
+                for time_unit in location_forecast_data.findall('TimeUnitData'):
+                    forecast = {
+                        'from': time_unit.find('DateTimeFrom').text if time_unit.find('DateTimeFrom') is not None else '',
+                        'to': time_unit.find('DateTimeTo').text if time_unit.find('DateTimeTo') is not None else '',
+                        'elements': {}
+                    }
+                    
+                    for element in time_unit.findall('Element'):
+                        element_name = element.find('ElementName').text if element.find('ElementName') is not None else ''
+                        element_value = element.find('ElementValue').text if element.find('ElementValue') is not None else ''
+                        forecast['elements'][element_name] = element_value
+                    
+                    location_data['forecasts'].append(forecast)
+            
+            locations.append(location_data)
+        
+        logger.info(f"Successfully parsed {len(locations)} locations with metadata: {metadata}")
+        return {
+            'metadata': metadata,
+            'locations': locations
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in mariners forecast: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching mariners forecast: {str(e)}")
+
+@app.get("/api/mariners-mapframe-direct")
+async def mariners_mapframe_direct():
+    """Serve the mariners forecast map iframe - direct endpoint"""
+    mapframe_path = backend_root / "mariners_mapframe.html"
+    logger.info(f"Looking for mariners mapframe at: {mapframe_path}")
+    if mapframe_path.exists():
+        return FileResponse(str(mapframe_path), media_type="text/html")
+    logger.error(f"Mariners mapframe not found at {mapframe_path}")
+    raise HTTPException(status_code=404, detail="Mariners mapframe not found")
 
 @app.get("/api/mariners-mapframe")
 async def mariners_mapframe():
@@ -643,9 +733,9 @@ if frontend_build.exists():
         # It's important this comes after the API routes.
         @app.get("/{full_path:path}", response_class=FileResponse, include_in_schema=False)
         async def serve_react_app(full_path: str):
-            # Explicitly exclude mapframe from catch-all
-            if full_path.startswith('mapframe'):
-                return await serve_mapframe()
+            # Explicitly exclude API endpoints from catch-all
+            if full_path.startswith('api/') or full_path.startswith('mariners-') or full_path.startswith('mapframe'):
+                raise HTTPException(status_code=404, detail="Not found")
             
             file_path = frontend_build / full_path
             # If the requested path points to a file in the build directory (like assets), serve it directly.

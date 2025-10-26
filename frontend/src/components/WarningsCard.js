@@ -44,6 +44,21 @@ const WarningsCard = ({ apiBaseUrl }) => {
     }
   };
 
+  const getWarningBadge = (description) => {
+    const text = description.toLowerCase();
+    if (text.includes('red')) return { color: '#dc3545', text: 'RED' };
+    if (text.includes('orange')) return { color: '#fd7e14', text: 'ORANGE' };
+    if (text.includes('yellow')) return { color: '#ffc107', text: 'YELLOW' };
+    return null;
+  };
+
+  const formatTitleWithTime = (title, pubDate) => {
+    if (!pubDate) return title;
+    const date = new Date(pubDate);
+    const ampm = date.toLocaleTimeString('en-US', { hour12: true }).split(' ')[1];
+    return `${title} ${ampm}`;
+  };
+
   if (loading) {
     return (
       <div className="stats-card h-100">
@@ -83,20 +98,36 @@ const WarningsCard = ({ apiBaseUrl }) => {
             </div>
           ) : (
             <div className="small" style={{ color }}>
-              <strong>{currentWarning.title}</strong>
+              <strong>{formatTitleWithTime(currentWarning.title, currentWarning.pub_date)}</strong>
               {currentWarning.description && (
                 <div className="mt-1" style={{ fontSize: '0.8em', lineHeight: '1.2' }}>
-                  {currentWarning.description}
+                  {(() => {
+                    const badge = getWarningBadge(currentWarning.description);
+                    const cleanDescription = currentWarning.description.replace(/^(red|orange|yellow)\s+warning\s+of\s+/i, '');
+                    return (
+                      <>
+                        {badge && (
+                          <span 
+                            style={{ 
+                              backgroundColor: badge.color, 
+                              color: 'white', 
+                              padding: '2px 6px', 
+                              borderRadius: '3px', 
+                              fontSize: '0.7em', 
+                              fontWeight: 'bold',
+                              marginRight: '5px'
+                            }}
+                          >
+                            {badge.text}
+                          </span>
+                        )}
+                        {cleanDescription}
+                      </>
+                    );
+                  })()
+                  }
                 </div>
               )}
-              <div className="text-muted mt-1">
-                {new Date(currentWarning.pub_date).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </div>
             </div>
           )}
         </div>

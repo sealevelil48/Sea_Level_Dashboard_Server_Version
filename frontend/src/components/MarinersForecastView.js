@@ -1,17 +1,36 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Button, Spinner, Tabs, Tab, Table } from 'react-bootstrap';
-import { translateWeatherCode as utilTranslateWeatherCode, parseWaveHeight, parseWindInfo } from '../utils/imsCodeTranslations';
 
 const translateWind = (windStr) => {
-  return parseWindInfo(windStr);
+  if (!windStr) return windStr;
+  const parts = windStr.split('/');
+  if (parts.length !== 2) return windStr;
+  const directions = {'045': 'NE', '135': 'SE', '225': 'SW', '315': 'NW', '180': 'S', '000': 'N', '090': 'E', '270': 'W'};
+  const dirPart = parts[0].trim();
+  let dirText = dirPart;
+  if (dirPart.includes('-')) {
+    const [start, end] = dirPart.split('-');
+    dirText = `${directions[start] || start}-${directions[end] || end}`;
+  } else {
+    dirText = directions[dirPart] || dirPart;
+  }
+  return `${dirText} (${parts[1].trim()} km/h)`;
 };
 
 const translateWeatherCode = (code) => {
-  return utilTranslateWeatherCode(code);
+  const codes = {'1220': 'Partly Cloudy', '1250': 'Mostly Cloudy', '1000': 'Clear', '4001': 'Rain', '8000': 'Thunderstorm'};
+  return codes[code] || code;
 };
 
 const translateSeaStatus = (seaStr) => {
-  return parseWaveHeight(seaStr);
+  if (!seaStr) return seaStr;
+  const parts = seaStr.split(' / ');
+  if (parts.length !== 2) return seaStr;
+  const code = parts[0].trim();
+  const height = parts[1].trim();
+  const seaCodes = {'10': 'Calm', '20': 'Smooth', '30': 'Slight', '40': 'Light', '50': 'Slight', '60': 'Moderate', '70': 'Rough', '80': 'Very Rough', '90': 'High', '95': 'Very High'};
+  const description = seaCodes[code] || code;
+  return `${description} (${height} cm)`;
 };
 
 const MarinersForecastView = ({ apiBaseUrl }) => {
@@ -25,27 +44,14 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching mariners forecast from:', `${apiBaseUrl}/api/mariners-forecast`);
       const response = await fetch(`${apiBaseUrl}/api/mariners-forecast`);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Mariners forecast error response:', errorText);
-        setError(`Failed to fetch mariners forecast: ${response.status} - ${errorText}`);
-        return;
+      if (response.ok) {
+        const data = await response.json();
+        setForecastData(data);
+      } else {
+        setError(`Failed to fetch mariners forecast: ${response.status}`);
       }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text();
-        console.error('Expected JSON but got:', contentType, responseText.substring(0, 200));
-        setError('Server returned non-JSON response');
-        return;
-      }
-      
-      const data = await response.json();
-      console.log('Mariners forecast data received:', data);
-      setForecastData(data);
     } catch (err) {
       console.error('Mariners forecast fetch error:', err);
       setError(err.message);

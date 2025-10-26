@@ -1409,7 +1409,7 @@ function Dashboard() {
                   
                   <Tab eventKey="map" title="Map View">
                     <Tabs activeKey={mapTab} onSelect={setMapTab} className="mb-2">
-                      <Tab eventKey="osm" title="OpenStreetMap">
+                      <Tab eventKey="osm" title="Leaflet">
                         <Suspense fallback={<Spinner animation="border" />}>
                           <MapView />
                         </Suspense>
