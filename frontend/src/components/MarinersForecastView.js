@@ -39,6 +39,16 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('table');
   const [iframeCreated, setIframeCreated] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // Mobile detection
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 768;
 
   const fetchForecastData = useCallback(async () => {
     try {
@@ -143,53 +153,101 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
   }
 
   const TableView = () => (
-    <div style={{ 
-      overflowX: 'auto', 
-      maxHeight: 'clamp(300px, 40vh, 400px)',
-      WebkitOverflowScrolling: 'touch'
-    }}>
-      <Table striped bordered hover variant="dark" size="sm">
-        <thead>
-          <tr>
-            <th>Location</th>
-            <th>Period</th>
-            <th>Pressure (hPa)</th>
-            <th>Sea Status & Waves</th>
-            <th>Wind</th>
-            <th>Visibility (NM)</th>
-            <th>Weather</th>
-            <th>Swell</th>
-          </tr>
-        </thead>
-        <tbody>
-          {forecastData.locations.map((location) =>
-            location.forecasts.map((forecast, idx) => (
-              <tr key={`${location.id}-${idx}`}>
-                <td>
-                  <strong>{location.name_eng}</strong>
-                  <br />
-                  <small className="text-muted">{location.name_heb}</small>
-                </td>
-                <td>
-                  <small>
-                    {formatDateTime(forecast.from)}
-                    <br />
-                    to
-                    <br />
-                    {formatDateTime(forecast.to)}
-                  </small>
-                </td>
-                <td>{forecast.elements['Pressure'] || 'N/A'}</td>
-                <td>{forecast.elements['Sea status and waves height'] ? translateSeaStatus(forecast.elements['Sea status and waves height']) : 'N/A'}</td>
-                <td>{forecast.elements['Wind direction and speed'] ? translateWind(forecast.elements['Wind direction and speed']) : 'N/A'}</td>
-                <td>{forecast.elements['Visibility'] || 'N/A'}</td>
-                <td>{forecast.elements['Weather code'] ? translateWeatherCode(forecast.elements['Weather code']) : 'N/A'}</td>
-                <td>{forecast.elements['Swell'] || 'N/A'}</td>
+    <div>
+      {/* Export button */}
+      <div className="mb-2 text-end">
+        <Button 
+          variant="outline-success" 
+          size="sm" 
+          onClick={exportTable}
+        >
+          📥 Export CSV
+        </Button>
+      </div>
+
+      {/* OUTER DIV: Vertical scroll container */}
+      <div 
+        style={{ 
+          maxHeight: isMobile ? '400px' : '500px',
+          overflowY: 'auto',
+          marginBottom: '15px'
+        }}
+      >
+        {/* INNER DIV: Horizontal scroll wrapper - CRITICAL FIX */}
+        <div 
+          className="table-responsive"
+          style={{ 
+            overflowX: 'auto',
+            overflowY: 'visible',  // CRITICAL: Don't block vertical scroll
+            WebkitOverflowScrolling: 'touch',
+            width: '100%',
+            display: 'block'
+          }}
+        >
+          <Table 
+            striped 
+            bordered 
+            hover 
+            variant="dark" 
+            size="sm"
+            style={{
+              marginBottom: 0,
+              minWidth: isMobile ? '800px' : '1000px'  // Force horizontal scroll
+            }}
+          >
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <th style={{ minWidth: '120px' }}>Location</th>
+                <th style={{ minWidth: '140px' }}>Period</th>
+                <th style={{ minWidth: '100px' }}>Pressure (hPa)</th>
+                <th style={{ minWidth: '150px' }}>Sea Status & Waves</th>
+                <th style={{ minWidth: '140px' }}>Wind</th>
+                <th style={{ minWidth: '100px' }}>Visibility (NM)</th>
+                <th style={{ minWidth: '120px' }}>Weather</th>
+                <th style={{ minWidth: '100px' }}>Swell</th>
               </tr>
-            ))
-          )}
-        </tbody>
-      </Table>
+            </thead>
+            <tbody>
+              {forecastData.locations.map((location) =>
+                location.forecasts.map((forecast, idx) => (
+                  <tr key={`${location.id}-${idx}`}>
+                    <td>
+                      <strong>{location.name_eng}</strong>
+                      <br />
+                      <small className="text-muted">{location.name_heb}</small>
+                    </td>
+                    <td>
+                      <small>
+                        {formatDateTime(forecast.from)}
+                        <br />
+                        to
+                        <br />
+                        {formatDateTime(forecast.to)}
+                      </small>
+                    </td>
+                    <td>{forecast.elements['Pressure'] || 'N/A'}</td>
+                    <td>{forecast.elements['Sea status and waves height'] ? translateSeaStatus(forecast.elements['Sea status and waves height']) : 'N/A'}</td>
+                    <td>{forecast.elements['Wind direction and speed'] ? translateWind(forecast.elements['Wind direction and speed']) : 'N/A'}</td>
+                    <td>{forecast.elements['Visibility'] || 'N/A'}</td>
+                    <td>{forecast.elements['Weather code'] ? translateWeatherCode(forecast.elements['Weather code']) : 'N/A'}</td>
+                    <td>{forecast.elements['Swell'] || 'N/A'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Mobile scroll hint */}
+      {isMobile && (
+        <div 
+          className="text-center text-muted" 
+          style={{ fontSize: '0.85rem', marginTop: '10px' }}
+        >
+          👆 Swipe left/right to see all columns
+        </div>
+      )}
     </div>
   );
 
