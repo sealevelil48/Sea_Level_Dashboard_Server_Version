@@ -1,7 +1,8 @@
 // frontend/src/components/GraphView.js - Enhanced with Kalman filter support
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Plot from 'react-plotly.js';
 import moment from 'moment';
+import apiService from '../services/apiService';
 
 // Helper for linear regression (existing)
 function linearRegression(x, y) {
@@ -31,6 +32,18 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
   const [graphData, setGraphData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // Track window resize for responsive layout
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Determine if mobile view
+  const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1024;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -325,55 +338,77 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
     fetchData();
   }, [filters, apiBaseUrl, setStats]);
 
-  // Layout configuration
-  const layout = {
-    title: {
-      text: `Sea Level Analysis - ${filters.station}`,
-      font: { color: 'white', size: 20 }
-    },
-    plot_bgcolor: '#1a2332',
-    paper_bgcolor: '#0c1c35',
-    font: { color: 'white' },
-    xaxis: {
-      title: 'Date/Time',
-      color: 'white',
-      gridcolor: '#2a3f5f',
-      showgrid: true,
-      zeroline: false
-    },
-    yaxis: {
-      title: 'Sea Level (m)',
-      color: 'white',
-      gridcolor: '#2a3f5f',
-      showgrid: true,
-      zeroline: true,
-      zerolinecolor: '#666'
-    },
-    legend: {
-      x: 0,
-      y: 1,
-      bgcolor: 'rgba(0,0,0,0.5)',
-      bordercolor: '#444',
-      borderwidth: 1
-    },
-    hovermode: 'x unified',
-    margin: { l: 60, r: 30, t: 60, b: 60 },
-    autosize: true,
-    showlegend: true
-  };
+  // Responsive layout configuration
+  const layout = useMemo(() => {
+    const stationName = filters.station || 'Multiple Stations';
+    
+    return {
+      title: {
+        text: `Sea Level Analysis - ${stationName}`,
+        font: { 
+          color: 'white', 
+          size: isMobile ? 14 : (isTablet ? 16 : 20) 
+        },
+        x: isMobile ? 0 : 0.5,
+        xanchor: isMobile ? 'left' : 'center'
+      },
+      plot_bgcolor: '#1a2332',
+      paper_bgcolor: '#0c1c35',
+      font: { 
+        color: 'white',
+        size: isMobile ? 10 : (isTablet ? 11 : 12)
+      },
+      xaxis: {
+        title: isMobile ? '' : 'Date/Time', // Hide axis titles on mobile
+        color: 'white',
+        gridcolor: '#2a3f5f',
+        showgrid: true,
+        zeroline: false,
+        tickangle: isMobile ? -45 : 0,
+        tickfont: { size: isMobile ? 9 : 11 }
+      },
+      yaxis: {
+        title: isMobile ? 'm' : 'Sea Level (m)',
+        color: 'white',
+        gridcolor: '#2a3f5f',
+        showgrid: true,
+        zeroline: true,
+        zerolinecolor: '#666',
+        tickfont: { size: isMobile ? 9 : 11 }
+      },
+      legend: {
+        x: isMobile ? 0 : 0,
+        y: isMobile ? -0.2 : 1,
+        orientation: isMobile ? 'h' : 'v',
+        bgcolor: 'rgba(0,0,0,0.5)',
+        bordercolor: '#444',
+        borderwidth: 1,
+        font: { size: isMobile ? 9 : 11 }
+      },
+      hovermode: 'x unified',
+      margin: isMobile 
+        ? { l: 40, r: 10, t: 40, b: 60 }  // Mobile margins
+        : isTablet
+        ? { l: 50, r: 20, t: 50, b: 50 }  // Tablet margins
+        : { l: 60, r: 30, t: 60, b: 60 }, // Desktop margins
+      autosize: true,
+      showlegend: true
+    };
+  }, [filters.station, isMobile, isTablet]);
 
-  const config = {
-    displayModeBar: true,
+  const config = useMemo(() => ({
+    displayModeBar: !isMobile, // Hide toolbar on mobile
     displaylogo: false,
     responsive: true,
+    modeBarButtonsToRemove: isMobile ? [] : ['lasso2d', 'select2d'],
     toImageButtonOptions: {
       format: 'png',
-      filename: `sea_level_${filters.station}_${new Date().toISOString().split('T')[0]}`,
-      height: 600,
-      width: 1200,
+      filename: `sea_level_${filters.station || 'multiple'}_${new Date().toISOString().split('T')[0]}`,
+      height: isMobile ? 400 : 600,
+      width: isMobile ? 800 : 1200,
       scale: 2
     }
-  };
+  }), [isMobile, filters.station]);
 
   if (isLoading) {
     return (
@@ -381,10 +416,15 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
         display: 'flex', 
         justifyContent: 'center', 
         alignItems: 'center', 
-        height: '400px',
+        height: isMobile ? '300px' : '400px',
         color: 'white'
       }}>
-        <div>Loading sea level data...</div>
+        <div>
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <div className="mt-2">Loading sea level data...</div>
+        </div>
       </div>
     );
   }
@@ -395,10 +435,15 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
         display: 'flex', 
         justifyContent: 'center', 
         alignItems: 'center', 
-        height: '400px',
-        color: '#ff4444'
+        height: isMobile ? '300px' : '400px',
+        color: '#ff4444',
+        padding: '20px',
+        textAlign: 'center'
       }}>
-        <div>Error: {error}</div>
+        <div>
+          <div style={{ fontSize: isMobile ? '1.2rem' : '1.5rem', marginBottom: '10px' }}>⚠️</div>
+          <div>Error: {error}</div>
+        </div>
       </div>
     );
   }
@@ -409,7 +454,10 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
         data={graphData}
         layout={layout}
         config={config}
-        style={{ width: '100%', height: '500px' }}
+        style={{ 
+          width: '100%', 
+          height: isMobile ? '350px' : (isTablet ? '450px' : '500px')
+        }}
         useResizeHandler={true}
       />
     </div>

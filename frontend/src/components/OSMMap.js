@@ -16,6 +16,24 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
   const [isVisible, setIsVisible] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // Track window resize for responsive map
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+      if (mapInstanceRef.current) {
+        setTimeout(() => {
+          mapInstanceRef.current.invalidateSize();
+        }, 100);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 768;
+  const mapHeight = isMobile ? (windowWidth < 576 ? '300px' : '350px') : '500px';
 
   // Station coordinates (Israel)
   const stationCoordinates = {
@@ -45,10 +63,18 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
 
 
 
-  // Check visibility
+  // Check visibility and tab changes
   useEffect(() => {
     const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(entry.isIntersecting),
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+        if (entry.isIntersecting && mapInstanceRef.current) {
+          // Force map refresh when becoming visible
+          setTimeout(() => {
+            mapInstanceRef.current.invalidateSize(true);
+          }, 100);
+        }
+      },
       { threshold: 0.1 }
     );
     
@@ -56,7 +82,21 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
       observer.observe(mapRef.current);
     }
     
-    return () => observer.disconnect();
+    // Listen for tab visibility changes
+    const handleVisibilityChange = () => {
+      if (!document.hidden && mapInstanceRef.current) {
+        setTimeout(() => {
+          mapInstanceRef.current.invalidateSize(true);
+        }, 200);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Initialize map when visible
@@ -95,7 +135,11 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
         setTimeout(() => {
           if (mapInstanceRef.current) {
             console.log('Resizing map and fitting bounds');
-            mapInstanceRef.current.invalidateSize();
+            // Force multiple resize attempts to ensure proper rendering
+            mapInstanceRef.current.invalidateSize(true);
+            setTimeout(() => mapInstanceRef.current.invalidateSize(true), 100);
+            setTimeout(() => mapInstanceRef.current.invalidateSize(true), 300);
+            
             const allMarkers = Object.values(markersRef.current).filter(m => m);
             if (allMarkers.length > 0) {
               const group = new L.featureGroup(allMarkers);
@@ -361,9 +405,12 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
       ref={mapRef} 
       style={{ 
         width: '100%', 
-        height: '500px',
+        height: mapHeight,
+        minHeight: mapHeight,
         borderRadius: '8px',
-        border: '1px solid #2a4a8c'
+        border: '1px solid #2a4a8c',
+        position: 'relative',
+        zIndex: 1
       }} 
     />
   );

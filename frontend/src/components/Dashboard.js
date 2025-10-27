@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
-import { Container, Row, Col, Card, Form, Tabs, Tab, Badge, Button, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Tabs, Tab, Badge, Button, Spinner, Collapse } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import Plot from 'react-plotly.js';
 import * as XLSX from 'xlsx';
@@ -41,6 +41,29 @@ function Dashboard() {
   const [itemsPerPage] = useState(50);
   const plotRef = useRef(null);
   const abortControllerRef = useRef(null);
+  
+  // NEW: Add mobile detection and filter collapse state
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [filtersOpen, setFiltersOpen] = useState(window.innerWidth > 768);
+  
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setWindowWidth(width);
+      // Auto-close filters on mobile, auto-open on desktop
+      if (width <= 768 && filtersOpen) {
+        setFiltersOpen(false);
+      } else if (width > 768 && !filtersOpen) {
+        setFiltersOpen(true);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [filtersOpen]);
+  
+  const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1024;
   
   const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
   
@@ -912,36 +935,49 @@ function Dashboard() {
   return (
     <ErrorBoundary>
       <div className="dash-container">
-        {/* Header */}
+        {/* Header - Mobile Optimized */}
         <div className="header">
           <h1 className="navbar-brand">
             <img 
               src="/assets/Mapi_Logo2.png" 
               alt="Survey of Israel Logo" 
-              title="Click to refresh dashboard"
               onClick={() => window.location.reload()}
               style={{
-                height: '40px', 
-                marginRight: '10px',
-                cursor: 'pointer',
-                transition: 'opacity 0.2s ease',
-                opacity: 1
+                height: isMobile ? '25px' : '40px',
+                marginRight: isMobile ? '6px' : '10px',
+                cursor: 'pointer'
               }}
-              onMouseEnter={(e) => e.target.style.opacity = '0.8'}
-              onMouseLeave={(e) => e.target.style.opacity = '1'}
             />
-            Sea Level Monitoring Dashboard
+            <span style={{ fontSize: isMobile ? '1rem' : '1.8rem' }}>
+              {isMobile ? 'Sea Level Dashboard' : 'Sea Level Monitoring Dashboard'}
+            </span>
           </h1>
-          <div id="current-time">{currentTime.toLocaleString()}</div>
+          <div id="current-time" style={{ fontSize: isMobile ? '11px' : '18px' }}>
+            {currentTime.toLocaleString()}
+          </div>
         </div>
 
         {/* Main Content */}
         <Container fluid className="p-1 p-md-3">
         <Row className="g-2">
-          {/* Filters Column */}
+          {/* FILTERS COLUMN - Collapsible on Mobile */}
           <Col xs={12} lg={3} xl={2}>
-            <Card className="filters-card h-100">
-              <Card.Body className="p-2" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            {isMobile && (
+              <Button
+                variant="primary"
+                className="w-100 mb-2"
+                onClick={() => setFiltersOpen(!filtersOpen)}
+                aria-controls="filters-collapse"
+                aria-expanded={filtersOpen}
+              >
+                {filtersOpen ? '▲ Hide Filters' : '▼ Show Filters'}
+              </Button>
+            )}
+            
+            <Collapse in={filtersOpen || !isMobile}>
+              <div id="filters-collapse">
+                <Card className="filters-card h-100">
+                  <Card.Body className="p-2" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
                 <h6 className="mb-2">Filters</h6>
                 
                 <Form.Group className="mb-2">
@@ -1128,45 +1164,73 @@ function Dashboard() {
                     </Button>
                   </Col>
                 </Row>
-              </Card.Body>
-            </Card>
+                  </Card.Body>
+                </Card>
+              </div>
+            </Collapse>
           </Col>
 
           {/* Content Column */}
           <Col xs={12} lg={9} xl={10}>
-            {/* Stats Cards */}
+            {/* Stats Cards - Responsive Grid */}
             <Row className="mb-3">
-              <Col lg={2} md={4} sm={6}>
+              <Col 
+                xs={6}  // 2 per row on mobile
+                sm={6}  // 2 per row on small tablets
+                md={3}  // 4 per row on medium+
+                className="mb-2"
+              >
                 <StatsCard 
-                  title="Current Level" 
+                  label="Current Level" 
                   value={stats.current_level.toFixed(3)} 
-                  suffix="m" 
+                  unit="m" 
+                  isMobile={isMobile}
                 />
               </Col>
-              <Col lg={2} md={4} sm={6}>
+              <Col 
+                xs={6}
+                sm={6}
+                md={3}
+                className="mb-2"
+              >
                 <StatsCard 
-                  title="24h Change" 
+                  label="24h Change" 
                   value={`${stats['24h_change'] >= 0 ? '+' : ''}${stats['24h_change'].toFixed(3)}`} 
-                  suffix="m" 
-                  color={stats['24h_change'] >= 0 ? 'green' : 'red'}
+                  unit="m" 
+                  colorClass={stats['24h_change'] >= 0 ? 'green' : 'red'}
+                  isMobile={isMobile}
                 />
               </Col>
-              <Col lg={2} md={4} sm={6}>
+              <Col 
+                xs={6}
+                sm={6}
+                md={3}
+                className="mb-2"
+              >
                 <StatsCard 
-                  title="Avg. Temp" 
+                  label="Avg. Temp" 
                   value={stats.avg_temp.toFixed(1)} 
-                  suffix="°C" 
+                  unit="°C" 
+                  isMobile={isMobile}
                 />
               </Col>
-              <Col lg={2} md={4} sm={6}>
+              <Col 
+                xs={6}
+                sm={6}
+                md={3}
+                className="mb-2"
+              >
                 <StatsCard 
-                  title="Anomalies" 
+                  label="Anomalies" 
                   value={stats.anomalies} 
+                  isMobile={isMobile}
                 />
               </Col>
-              <Col lg={4} md={8} sm={12}>
-                <WarningsCard apiBaseUrl={API_BASE_URL} />
-              </Col>
+              {!isMobile && (
+                <Col lg={4} md={8} sm={12}>
+                  <WarningsCard apiBaseUrl={API_BASE_URL} />
+                </Col>
+              )}
             </Row>
 
             {/* Tabs */}
@@ -1218,7 +1282,11 @@ function Dashboard() {
                   <Tab eventKey="table" title="Table View">
                     <Tabs activeKey={tableTab} onSelect={setTableTab} className="mb-2">
                       <Tab eventKey="historical" title="Historical">
-                        <div style={{ overflowX: 'auto', maxHeight: 'clamp(300px, 40vh, 400px)' }}>
+                        <div style={{ 
+                          overflowX: 'auto', 
+                          maxHeight: 'clamp(300px, 40vh, 400px)',
+                          WebkitOverflowScrolling: 'touch'
+                        }}>
                           {tableData.length > 0 ? (
                             <>
                               <table className="table table-dark table-striped table-sm">
@@ -1438,41 +1506,26 @@ function Dashboard() {
         </Row>
       </Container>
 
-      {/* Footer with Disclaimer Links */}
+      {/* FOOTER - Mobile Optimized */}
       <footer style={{ 
-        backgroundColor: '#0a172c', 
-        padding: '20px 0', 
-        marginTop: '40px',
+        backgroundColor: '#0a172c',
+        padding: isMobile ? '15px' : '20px',
+        textAlign: 'center',
         borderTop: '1px solid #1e3c72',
-        textAlign: 'center'
+        marginTop: '20px',
+        fontSize: isMobile ? '0.8rem' : '0.95rem'
       }}>
-        <Container>
-          <div style={{ color: '#a0c8f0', fontSize: '0.9rem' }}>
-            <a 
-              href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              style={{ 
-                color: '#a0c8f0', 
-                textDecoration: 'none'
-              }}
-            >
-              © 2025 Survey of Israel. All rights reserved.
-            </a>
-            <span style={{ margin: '0 10px' }}>|</span>
-            <Link 
-              to="/disclaimer" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              style={{ 
-                color: '#a0c8f0', 
-                textDecoration: 'none'
-              }}
-            >
-              Terms of Use
-            </Link>
-          </div>
-        </Container>
+        <p style={{ color: '#a0c8f0', margin: 0 }}>
+          © 2025 Survey of Israel. All rights reserved.
+          {!isMobile && (
+            <> | <Link to="/disclaimer" style={{ color: '#4dabf5' }}>Disclaimer</Link></>
+          )}
+        </p>
+        {isMobile && (
+          <p style={{ color: '#a0c8f0', margin: '5px 0 0 0' }}>
+            <Link to="/disclaimer" style={{ color: '#4dabf5' }}>Disclaimer</Link>
+          </p>
+        )}
       </footer>
     </div>
     </ErrorBoundary>

@@ -1,27 +1,36 @@
-/* frontend/src/App.css - Complete styling with all features */
+/* ============================================
+   SEA LEVEL DASHBOARD - MOBILE RESPONSIVE CSS
+   ============================================ */
 
-/* Global Styles */
+/* ========== GLOBAL STYLES ========== */
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: #0c1c35 !important;
   color: white;
+  overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
 .dash-container {
   background-color: #0c1c35;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
-/* Header */
+/* ========== HEADER ========== */
 .header {
   background: linear-gradient(90deg, #0a172c, #142950);
-  padding: 12px 25px;
+  padding: 12px 15px; /* Reduced for mobile */
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #1e3c72;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap; /* Allow wrapping on very small screens */
 }
 
 .navbar-brand {
@@ -36,31 +45,41 @@ body {
   background-clip: text;
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 0; /* Allow text truncation */
+}
+
+.navbar-brand img {
+  height: 40px;
+  margin-right: 10px;
+  flex-shrink: 0; /* Prevent logo shrinking */
 }
 
 #current-time {
   color: #4dabf5;
   font-weight: bold;
   font-size: 18px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* Cards */
+/* ========== CARDS ========== */
 .card {
   background-color: #142950 !important;
   border: none !important;
   color: white;
   border-radius: 12px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  margin-bottom: 15px;
 }
 
 .filters-card {
-  height: calc(100vh - 120px);
-  overflow-y: auto;
-  position: sticky;
-  top: 20px;
+  height: auto; /* Remove fixed height on mobile */
+  overflow-y: visible;
+  position: static; /* Remove sticky on mobile */
 }
 
-/* Stats Cards */
+/* ========== STATS CARDS ========== */
 .stat-card {
   background-color: #1e3c72 !important;
   transition: all 0.3s ease;
@@ -103,110 +122,80 @@ body {
 .stat-label {
   font-size: 0.9rem;
   color: #a0c8f0;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin-bottom: 8px;
-  font-weight: 600;
 }
 
 .stat-value {
-  font-size: 1.6rem;
-  font-weight: bold;
+  font-size: 2rem;
+  font-weight: 700;
   color: white !important;
-  margin: 5px 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  line-height: 1.2;
 }
 
-/* Form Controls */
+.stat-unit {
+  font-size: 1rem;
+  color: #a0c8f0;
+  margin-left: 4px;
+}
+
+.stat-icon {
+  font-size: 2.5rem;
+  opacity: 0.3;
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ========== FORMS ========== */
 .form-label {
-  color: #a0c8f0 !important;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.form-control, .form-select {
-  background-color: white !important;
-  color: black !important;
-  border: 1px solid #2a4a8c;
-  border-radius: 6px;
-}
-
-.form-control:focus, .form-select:focus {
-  background-color: white !important;
-  color: black !important;
-  border-color: #1e6bc4;
-  box-shadow: 0 0 0 0.2rem rgba(30, 107, 196, 0.25);
-}
-
-.form-check-input {
-  background-color: #2a4a8c;
-  border-color: #2a4a8c;
-}
-
-.form-check-input:checked {
-  background-color: #1e6bc4;
-  border-color: #1e6bc4;
-}
-
-.form-check-label {
-  color: #a0c8f0 !important;
-}
-
-/* Buttons */
-.btn-primary {
-  background-color: #1e6bc4 !important;
-  border-color: #1e6bc4 !important;
-  border-radius: 6px;
+  color: #a0c8f0;
   font-weight: bold;
-  transition: all 0.2s ease;
+  font-size: 0.95rem;
+  margin-top: 10px;
+  display: block;
+}
+
+.form-control,
+.form-select {
+  background-color: #1e3c72 !important;
+  border: 1px solid #2a4a8c !important;
+  color: white !important;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: #2a4a8c !important;
+  border-color: #3b82f6 !important;
+  color: white !important;
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+}
+
+.btn-primary {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
 }
 
 .btn-primary:hover {
-  background-color: #1557a8 !important;
-  border-color: #1557a8 !important;
-  transform: translateY(-1px);
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
 }
 
-.btn-outline-primary {
-  color: #1e6bc4 !important;
-  border-color: #1e6bc4 !important;
+/* ========== TABLES ========== */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 20px;
+}
+
+.table {
   background-color: transparent !important;
-}
-
-.btn-outline-primary:hover {
-  background-color: #1e6bc4 !important;
-  color: white !important;
-}
-
-/* Tabs */
-.nav-tabs {
-  border-bottom: 1px solid #2a4a8c;
-}
-
-.nav-tabs .nav-link {
-  color: #a0c8f0;
-  border: none;
-  background-color: transparent;
-  padding: 8px 24px;
-  transition: all 0.3s ease;
-  border-radius: 6px 6px 0 0;
-  font-weight: 500;
-}
-
-.nav-tabs .nav-link:hover {
-  color: white;
-  background-color: #142950;
-}
-
-.nav-tabs .nav-link.active {
-  color: white;
-  background-color: #1e6bc4;
-  border-color: #1e6bc4;
-  font-weight: 700;
-}
-
-/* Table */
-.table-dark {
-  background-color: transparent !important;
+  min-width: 600px; /* Ensure table has minimum width */
 }
 
 .table-dark th {
@@ -214,38 +203,107 @@ body {
   color: white;
   border-color: #2a4a8c !important;
   font-weight: bold;
-  padding: 12px;
+  padding: 12px 8px; /* Reduced padding for mobile */
+  white-space: nowrap;
 }
 
 .table-dark td {
   background-color: #2a4a8c !important;
   color: white;
   border-color: #2a4a8c !important;
-  padding: 10px;
+  padding: 10px 8px;
 }
 
 .table-striped tbody tr:nth-of-type(odd) td {
   background-color: #1e3c72 !important;
 }
 
-/* Plot Container */
+/* ========== PLOTLY GRAPHS ========== */
 .js-plotly-plot {
   width: 100% !important;
   height: 100% !important;
 }
 
-/* Map Container */
+.js-plotly-plot .plotly {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ========== MAPS ========== */
 .map-panel {
   background-color: transparent !important;
   border: 1px solid #2a4a8c;
   border-radius: 12px;
   overflow: hidden;
   padding: 0 !important;
+  height: 500px;
+  width: 100%;
 }
 
-/* Scrollbar */
+/* Fix for Leaflet map container */
+.leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 8px;
+}
+
+/* Ensure map div has proper height */
+div[style*="height: 500px"] {
+  min-height: 500px !important;
+}
+
+/* Mobile map adjustments */
+@media (max-width: 768px) {
+  .map-panel {
+    height: 350px;
+  }
+  
+  div[style*="height: 500px"] {
+    min-height: 350px !important;
+    height: 350px !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .map-panel {
+    height: 300px;
+  }
+  
+  div[style*="height: 500px"] {
+    min-height: 300px !important;
+    height: 300px !important;
+  }
+}
+
+/* ========== TABS ========== */
+.nav-tabs {
+  border-bottom: 1px solid #2a4a8c;
+  flex-wrap: wrap; /* Allow tabs to wrap on mobile */
+}
+
+.nav-tabs .nav-link {
+  color: #a0c8f0;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 12px 15px; /* Adjusted padding */
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.nav-tabs .nav-link.active {
+  color: white;
+  background-color: transparent;
+  border-bottom-color: #3b82f6;
+}
+
+.nav-tabs .nav-link:hover {
+  border-bottom-color: #3b82f6;
+}
+
+/* ========== SCROLLBAR ========== */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -261,13 +319,289 @@ body {
   background: #1e6bc4;
 }
 
-/* Loading Spinner */
+/* ========== RESPONSIVE BREAKPOINTS ========== */
+
+/* Large Tablets and Small Desktops (1200px and down) */
+@media (max-width: 1200px) {
+  .navbar-brand {
+    font-size: 1.5rem;
+  }
+  
+  .stat-card {
+    min-width: calc(50% - 10px);
+  }
+  
+  .filters-column {
+    max-width: 100%;
+  }
+}
+
+/* Tablets (992px and down) */
+@media (max-width: 992px) {
+  .header {
+    padding: 10px 12px;
+  }
+  
+  .navbar-brand {
+    font-size: 1.3rem;
+  }
+  
+  .navbar-brand img {
+    height: 35px;
+  }
+  
+  #current-time {
+    font-size: 14px;
+  }
+  
+  .filters-card {
+    height: auto !important;
+    position: static !important;
+    margin-bottom: 20px;
+  }
+  
+  .stat-value {
+    font-size: 1.6rem;
+  }
+  
+  .map-panel {
+    height: 400px;
+  }
+}
+
+/* Mobile Landscape and Small Tablets (768px and down) */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .header {
+    padding: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .navbar-brand {
+    font-size: 1.1rem;
+    width: 100%;
+  }
+  
+  .navbar-brand img {
+    height: 30px;
+    margin-right: 8px;
+  }
+  
+  #current-time {
+    font-size: 12px;
+    width: 100%;
+    text-align: left;
+  }
+  
+  /* Stack filters on mobile */
+  .filters-column {
+    max-width: 100%;
+    margin-bottom: 15px;
+  }
+  
+  /* Full width stats cards on mobile */
+  .stat-card {
+    min-width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .stat-value {
+    font-size: 1.4rem;
+  }
+  
+  .stat-label {
+    font-size: 0.8rem;
+  }
+  
+  /* Adjust graph height for mobile */
+  .js-plotly-plot {
+    min-height: 300px !important;
+  }
+  
+  .map-panel {
+    height: 350px;
+  }
+  
+  /* Make tabs scrollable on mobile */
+  .nav-tabs {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .nav-tabs .nav-link {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+  
+  /* Reduce card padding on mobile */
+  .card-body {
+    padding: 12px !important;
+  }
+  
+  /* Adjust form elements */
+  .form-control,
+  .form-select {
+    padding: 8px;
+    font-size: 14px;
+  }
+  
+  /* Button adjustments */
+  .btn {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+  /* Table adjustments */
+  .table-dark th,
+  .table-dark td {
+    padding: 8px 6px;
+    font-size: 0.85rem;
+  }
+}
+
+/* Mobile Portrait (576px and down) */
+@media (max-width: 576px) {
+  .header {
+    padding: 8px;
+  }
+  
+  .navbar-brand {
+    font-size: 1rem;
+  }
+  
+  .navbar-brand img {
+    height: 25px;
+    margin-right: 6px;
+  }
+  
+  #current-time {
+    font-size: 11px;
+  }
+  
+  .stat-value {
+    font-size: 1.2rem;
+  }
+  
+  .stat-label {
+    font-size: 0.75rem;
+  }
+  
+  .card-body {
+    padding: 10px !important;
+  }
+  
+  .map-panel {
+    height: 300px;
+  }
+  
+  /* Extra small form elements */
+  .form-control,
+  .form-select {
+    padding: 6px;
+    font-size: 13px;
+  }
+  
+  .btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  
+  .nav-tabs .nav-link {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+  
+  /* Reduce all margins/paddings */
+  .container-fluid {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  
+  .row {
+    margin-left: -4px !important;
+    margin-right: -4px !important;
+  }
+  
+  .col,
+  [class*="col-"] {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+}
+
+/* Extra Small Devices (480px and down) */
+@media (max-width: 480px) {
+  .navbar-brand {
+    font-size: 0.9rem;
+  }
+  
+  .navbar-brand img {
+    height: 22px;
+  }
+  
+  #current-time {
+    font-size: 10px;
+  }
+  
+  .stat-value {
+    font-size: 1.1rem;
+  }
+  
+  .map-panel {
+    height: 250px;
+  }
+  
+  /* Stack all content vertically */
+  .d-flex {
+    flex-direction: column !important;
+  }
+  
+  /* Full width buttons */
+  .btn {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+
+/* ========== PLOTLY RESPONSIVE CONFIG ========== */
+/* Ensure Plotly charts adapt to container */
+.plotly-graph-div {
+  width: 100% !important;
+}
+
+.plotly-graph-div .plotly {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Hide Plotly modebar on very small screens */
+@media (max-width: 576px) {
+  .modebar {
+    display: none !important;
+  }
+}
+
+/* ========== LOADING SPINNER ========== */
 .spinner-border {
   width: 3rem;
   height: 3rem;
 }
 
-/* Animation for stats cards */
+@media (max-width: 576px) {
+  .spinner-border {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+/* ========== ANIMATIONS ========== */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -283,47 +617,64 @@ body {
   animation: fadeInUp 0.5s ease forwards;
 }
 
-/* Custom Map Styles */
-.custom-marker {
-  background: transparent !important;
-  border: none !important;
-}
-
-.custom-popup .leaflet-popup-content-wrapper {
-  background-color: #142950;
-  color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.custom-popup .leaflet-popup-tip {
-  background-color: #142950;
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-  .stat-card {
-    min-width: calc(50% - 10px);
-  }
+/* ========== UTILITY CLASSES ========== */
+.text-truncate-mobile {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
-  .filters-card {
-    height: auto;
-    position: static;
-    margin-bottom: 20px;
+  .hide-mobile {
+    display: none !important;
   }
   
-  .stat-card {
-    min-width: 100%;
-    margin-bottom: 10px;
+  .show-mobile {
+    display: block !important;
+  }
+}
+
+/* ========== LEAFLET MAP RESPONSIVE ========== */
+.leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ========== CUSTOM DROPDOWN MOBILE ========== */
+@media (max-width: 768px) {
+  .dropdown-menu {
+    max-height: 300px;
+    overflow-y: auto;
   }
   
-  .navbar-brand {
-    font-size: 1.2rem;
-  }
-  
-  #current-time {
+  .dropdown-item {
+    padding: 10px 15px;
     font-size: 14px;
+  }
+}
+
+/* ========== FIX BOOTSTRAP CONTAINER OVERFLOW ========== */
+.container-fluid {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.row {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+/* ========== PRINT STYLES ========== */
+@media print {
+  .filters-card,
+  .nav-tabs,
+  .btn,
+  .header {
+    display: none !important;
+  }
+  
+  .card {
+    border: 1px solid #000 !important;
+    page-break-inside: avoid;
   }
 }
