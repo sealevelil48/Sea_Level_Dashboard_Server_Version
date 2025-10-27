@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Button, Spinner, Tabs, Tab, Table } from 'react-bootstrap';
 
+// Translation functions
 const translateWind = (windStr) => {
   if (!windStr) return windStr;
   const parts = windStr.split('/');
@@ -100,7 +101,6 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     });
   };
 
-  // SINGLE exportTable function - called by Dashboard's Export Table button
   const exportTable = useCallback(() => {
     if (!forecastData?.locations) return;
     
@@ -142,12 +142,8 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     URL.revokeObjectURL(url);
   }, [forecastData]);
 
-  // Listen for export event from Dashboard's Export Table button
   useEffect(() => {
-    const handleExportEvent = () => {
-      exportTable();
-    };
-    
+    const handleExportEvent = () => exportTable();
     window.addEventListener('exportMarinersTable', handleExportEvent);
     return () => window.removeEventListener('exportMarinersTable', handleExportEvent);
   }, [exportTable]);
@@ -176,84 +172,6 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
       </div>
     );
   }
-
-  // ✅ FIXED: Simple single container pattern (like working Historical table)
-  const TableView = () => (
-    <div style={{ 
-      overflowX: 'auto',
-      maxHeight: isMobile ? '400px' : '500px',
-      WebkitOverflowScrolling: 'touch'
-    }}>
-      <Table 
-        striped 
-        bordered 
-        hover 
-        responsive
-        variant="dark" 
-        size="sm"
-        style={{
-          minWidth: '1100px',
-          marginBottom: 0
-        }}
-      >
-        <thead>
-          <tr>
-            <th>Location</th>
-            <th>Period</th>
-            <th>Pressure (hPa)</th>
-            <th>Sea Status & Waves</th>
-            <th>Wind</th>
-            <th>Visibility (NM)</th>
-            <th>Weather</th>
-            <th>Swell</th>
-          </tr>
-        </thead>
-        <tbody>
-          {forecastData.locations.map((location) =>
-            location.forecasts.map((forecast, idx) => (
-              <tr key={`${location.id}-${idx}`}>
-                <td>
-                  <strong>{location.name_eng}</strong>
-                  <br />
-                  <small style={{ color: '#FFFFFF' }}>{location.name_heb}</small>
-                </td>
-                <td>
-                  <small>
-                    {formatDateTime(forecast.from)}
-                    <br />
-                    to
-                    <br />
-                    {formatDateTime(forecast.to)}
-                  </small>
-                </td>
-                <td>{forecast.elements['Pressure'] || 'N/A'}</td>
-                <td>
-                  {forecast.elements['Sea status and waves height'] ? 
-                    translateSeaStatus(forecast.elements['Sea status and waves height']) : 
-                    'N/A'
-                  }
-                </td>
-                <td>
-                  {forecast.elements['Wind direction and speed'] ? 
-                    translateWind(forecast.elements['Wind direction and speed']) : 
-                    'N/A'
-                  }
-                </td>
-                <td>{forecast.elements['Visibility'] || 'N/A'}</td>
-                <td>
-                  {forecast.elements['Weather code'] ? 
-                    translateWeatherCode(forecast.elements['Weather code']) : 
-                    'N/A'
-                  }
-                </td>
-                <td>{forecast.elements['Swell'] || 'N/A'}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </Table>
-    </div>
-  );
 
   return (
     <div>
@@ -294,7 +212,75 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
         className="mb-3"
       >
         <Tab eventKey="table" title="Table View">
-          {activeTab === 'table' && <TableView />}
+          {activeTab === 'table' && (
+            <div style={{ overflowX: 'auto' }}>
+              <Table 
+                striped 
+                bordered 
+                hover 
+                variant="dark" 
+                size="sm"
+                responsive
+                style={{ minWidth: '1100px' }}
+              >
+                <thead style={{ backgroundColor: '#1e3c72' }}>
+                  <tr>
+                    <th style={{ minWidth: '150px' }}>📍 Location</th>
+                    <th style={{ minWidth: '160px' }}>⏰ Period</th>
+                    <th style={{ minWidth: '100px' }}>🌡️ Pressure</th>
+                    <th style={{ minWidth: '180px' }}>🌊 Sea Status</th>
+                    <th style={{ minWidth: '150px' }}>💨 Wind</th>
+                    <th style={{ minWidth: '100px' }}>👁️ Visibility</th>
+                    <th style={{ minWidth: '130px' }}>☁️ Weather</th>
+                    <th style={{ minWidth: '100px' }}>🌀 Swell</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecastData.locations.map((location) =>
+                    location.forecasts.map((forecast, idx) => (
+                      <tr key={`${location.id}-${idx}`}>
+                        <td>
+                          <strong>{location.name_eng}</strong>
+                          <br />
+                          <small style={{ color: '#FFFFFF' }}>{location.name_heb}</small>
+                        </td>
+                        <td>
+                          <small>
+                            {formatDateTime(forecast.from)}
+                            <br />
+                            to
+                            <br />
+                            {formatDateTime(forecast.to)}
+                          </small>
+                        </td>
+                        <td>{forecast.elements['Pressure'] || 'N/A'}</td>
+                        <td>
+                          {forecast.elements['Sea status and waves height'] ? 
+                            translateSeaStatus(forecast.elements['Sea status and waves height']) : 
+                            'N/A'
+                          }
+                        </td>
+                        <td>
+                          {forecast.elements['Wind direction and speed'] ? 
+                            translateWind(forecast.elements['Wind direction and speed']) : 
+                            'N/A'
+                          }
+                        </td>
+                        <td>{forecast.elements['Visibility'] || 'N/A'}</td>
+                        <td>
+                          {forecast.elements['Weather code'] ? 
+                            translateWeatherCode(forecast.elements['Weather code']) : 
+                            'N/A'
+                          }
+                        </td>
+                        <td>{forecast.elements['Swell'] || 'N/A'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          )}
         </Tab>
         
         <Tab eventKey="map" title="Map View">

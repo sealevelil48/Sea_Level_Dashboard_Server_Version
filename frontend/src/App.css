@@ -840,3 +840,188 @@ div[style*="height: 500px"] {
     max-width: calc(100vw - 30px) !important;
   }
 }
+/* ========== PLOTLY MOBILE PORTRAIT FULLSCREEN FIX ========== */
+/* Force Plotly modebar visibility in mobile portrait fullscreen mode */
+
+/* Critical: Force modebar to show in ALL fullscreen orientations */
+.js-plotly-plot[style*="position: fixed"] .modebar {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: fixed !important;
+  top: 60px !important;
+  right: 15px !important;
+  z-index: 2001 !important;
+  background: rgba(20, 41, 80, 0.95) !important;
+  border-radius: 4px !important;
+  padding: 4px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+}
+
+/* Force all modebar groups to be visible */
+.js-plotly-plot[style*="position: fixed"] .modebar-group {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-direction: row !important;
+  margin: 0 2px !important;
+}
+
+/* Force all buttons to be visible and properly sized */
+.js-plotly-plot[style*="position: fixed"] .modebar-btn {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 36px !important;
+  height: 36px !important;
+  margin: 1px !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Mobile specific overrides */
+@media (max-width: 768px) {
+  .js-plotly-plot[style*="position: fixed"] .modebar {
+    top: 60px !important;
+    right: 10px !important;
+    max-width: calc(100vw - 20px) !important;
+    min-height: 40px !important;
+  }
+}
+
+/* Portrait mode specific - CRITICAL */
+@media (max-width: 768px) and (orientation: portrait) {
+  .js-plotly-plot[style*="position: fixed"] .modebar {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    top: 60px !important;
+    right: 10px !important;
+  }
+}
+/* ========== MARINERS TABLE SCROLL FIX ========== */
+/* Override body overflow-x: hidden for table scroll */
+
+.mariners-scroll-container {
+  /* Force independent scroll context */
+  isolation: isolate !important;
+  contain: layout style !important;
+  
+  /* Enable horizontal scroll */
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  
+  /* Prevent scroll chaining to body */
+  overscroll-behavior-x: contain !important;
+  overscroll-behavior-y: none !important;
+  
+  /* Mobile optimizations */
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-x !important;
+  
+  /* Ensure scrollbar is visible */
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+}
+
+/* Force scrollbar always visible on desktop */
+@media (min-width: 769px) {
+  .mariners-scroll-container {
+    scrollbar-width: auto !important;
+  }
+  
+  .mariners-scroll-container::-webkit-scrollbar {
+    height: 10px !important;
+    display: block !important;
+  }
+  
+  .mariners-scroll-container::-webkit-scrollbar-track {
+    background: #0c1c35 !important;
+    border-radius: 5px !important;
+  }
+  
+  .mariners-scroll-container::-webkit-scrollbar-thumb {
+    background: #3b82f6 !important;
+    border-radius: 5px !important;
+  }
+  
+  .mariners-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #2563eb !important;
+  }
+}
+
+/* Mobile: Enhanced touch scrolling */
+@media (max-width: 768px) {
+  .mariners-scroll-container {
+    /* Force scroll context on mobile */
+    position: relative !important;
+    
+    /* Prevent momentum cancel */
+    -webkit-overflow-scrolling: touch !important;
+    
+    /* Allow only horizontal pan */
+    touch-action: pan-x pan-y !important;
+    
+    /* Visual feedback */
+    cursor: grab !important;
+  }
+  
+  .mariners-scroll-container:active {
+    cursor: grabbing !important;
+  }
+  
+  /* Thinner scrollbar on mobile */
+  .mariners-scroll-container::-webkit-scrollbar {
+    height: 4px !important;
+  }
+  
+  .mariners-scroll-container::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.7) !important;
+  }
+}
+
+/* Ensure table doesn't break out */
+.mariners-scroll-container table {
+  min-width: 1100px !important;
+  width: max-content !important;
+  table-layout: auto !important;
+  margin-bottom: 0 !important;
+}
+
+/* Sticky header styling */
+.mariners-scroll-container thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 9 !important;
+  background-color: #1e3c72 !important;
+}
+
+/* On mobile, adjust for scroll indicator */
+@media (max-width: 768px) {
+  .mariners-scroll-container thead {
+    top: 25px !important;
+  }
+}
+/* ========== FINAL FIX: DISABLE ALL SCROLL SNAP GLOBALLY ========== */
+* {
+  scroll-snap-type: none !important;
+  scroll-snap-align: none !important;
+  scroll-snap-stop: normal !important;
+}
+
+/* Force disable on all elements */
+*::-webkit-scrollbar {
+  scroll-snap-type: none !important;
+}
+
+/* Disable momentum scrolling interference */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: auto !important;
+    overscroll-behavior: auto !important;
+    scroll-behavior: auto !important;
+  }
+}
