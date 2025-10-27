@@ -211,7 +211,10 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
             WebkitOverflowScrolling: 'touch',
             width: '100%',
             position: 'relative',
-            touchAction: 'pan-x pan-y'
+            touchAction: 'pan-x pan-y',
+            scrollSnapType: 'none',
+            scrollBehavior: 'auto',
+            overscrollBehaviorX: 'contain'
           }}
         >
           <Table 
@@ -225,7 +228,8 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
               minWidth: '1100px',
               width: 'max-content',
               display: 'table',
-              tableLayout: 'auto'
+              tableLayout: 'auto',
+              overflowAnchor: 'none'
             }}
           >
             <thead style={{ 
