@@ -177,38 +177,41 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     );
   }
 
-  // ✅ FIXED: Mobile horizontal scroll with escape hatch
+  // ✅ ULTIMATE FIX: Full viewport width, breaks free from ALL parents
   const TableView = () => (
     <div style={{ 
-      width: '100%',
-      maxWidth: '100vw',
       position: 'relative',
-      margin: isMobile ? '0 -12px' : '0',  // Escape card padding on mobile
-      padding: isMobile ? '0 12px' : '0',
-      isolation: 'isolate'
+      left: isMobile ? '50%' : '0',
+      right: isMobile ? '50%' : 'auto',
+      marginLeft: isMobile ? '-50vw' : '0',
+      marginRight: isMobile ? '-50vw' : '0',
+      width: isMobile ? '100vw' : '100%',
+      maxWidth: isMobile ? '100vw' : 'none',
+      paddingLeft: isMobile ? '8px' : '0',
+      paddingRight: isMobile ? '8px' : '0',
+      boxSizing: 'border-box'
     }}>
       {/* OUTER CONTAINER: Vertical scroll only */}
       <div 
         style={{ 
           maxHeight: isMobile ? '400px' : '500px',
           overflowY: 'auto',
-          overflowX: 'clip',
+          overflowX: 'hidden',
           marginBottom: '15px',
           border: '1px solid #2a4a8c',
           borderRadius: '8px',
-          position: 'relative'
+          backgroundColor: '#142950'
         }}
       >
-        {/* INNER CONTAINER: Horizontal scroll enabled */}
+        {/* INNER CONTAINER: Horizontal scroll FORCED */}
         <div 
           style={{ 
             overflowX: 'scroll',
-            overflowY: 'visible',
+            overflowY: 'hidden',
             WebkitOverflowScrolling: 'touch',
             width: '100%',
             position: 'relative',
-            scrollbarWidth: 'thin',
-            msOverflowStyle: 'scrollbar'
+            touchAction: 'pan-x pan-y'
           }}
         >
           <Table 
@@ -219,11 +222,10 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
             size="sm"
             style={{
               marginBottom: 0,
-              minWidth: isMobile ? '900px' : '1100px',
+              minWidth: '1100px',
               width: 'max-content',
               display: 'table',
-              borderCollapse: 'separate',
-              borderSpacing: 0
+              tableLayout: 'auto'
             }}
           >
             <thead style={{ 
