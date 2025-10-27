@@ -83,7 +83,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
           <Row>
             <Col>
               <h5 className="mb-1">{forecastData.metadata?.title}</h5>
-              <small className="text-muted">
+              <small style={{ color: '#FFFFFF' }}>
                 {forecastData.metadata?.organization} | 
                 Issued: {formatDateTime(forecastData.metadata?.issue_datetime)}
               </small>

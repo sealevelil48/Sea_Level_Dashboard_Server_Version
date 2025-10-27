@@ -699,3 +699,144 @@ div[style*="height: 500px"] {
     page-break-inside: avoid;
   }
 }
+
+/* ========== FIX: FILTER SCROLL ISOLATION ========== */
+/* Prevent filter menu from interfering with main page scroll */
+
+@media (max-width: 768px) {
+  /* Filter collapse container */
+  #filters-collapse {
+    position: relative;
+    z-index: 100;
+    isolation: isolate;
+  }
+  
+  /* Filter card body - independent scroll */
+  #filters-collapse .card-body,
+  .filters-card .card-body {
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    
+    /* Critical: Isolate touch events */
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    
+    /* Prevent scroll propagation */
+    isolation: isolate;
+    
+    /* Visual indicator for scrollability */
+    border-right: 3px solid rgba(59, 130, 246, 0.3);
+  }
+  
+  /* Main container should not interfere */
+  .container-fluid {
+    touch-action: pan-y pan-x !important;
+    overscroll-behavior: auto !important;
+  }
+  
+  /* Ensure filter form elements don't expand beyond bounds */
+  #filters-collapse .form-group,
+  #filters-collapse .form-control,
+  #filters-collapse .form-select {
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+}
+
+/* ========== IMPROVED SCROLLBAR FOR FILTERS ========== */
+@media (max-width: 768px) {
+  #filters-collapse .card-body::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  #filters-collapse .card-body::-webkit-scrollbar-track {
+    background: rgba(20, 41, 80, 0.5);
+    border-radius: 3px;
+  }
+  
+  #filters-collapse .card-body::-webkit-scrollbar-thumb {
+    background: #3b82f6;
+    border-radius: 3px;
+  }
+  
+  #filters-collapse .card-body::-webkit-scrollbar-thumb:hover {
+    background: #2563eb;
+  }
+}
+/* ========== PLOTLY MOBILE TOUCH ENHANCEMENT ========== */
+.js-plotly-plot {
+  touch-action: manipulation !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Fullscreen graph specific styles */
+.js-plotly-plot[style*="position: fixed"] {
+  touch-action: pan-x pan-y pinch-zoom !important;
+  overflow: hidden;
+}
+
+/* Ensure modebar is visible and accessible */
+.modebar-container {
+  pointer-events: all !important;
+}
+
+.modebar {
+  opacity: 1 !important;
+}
+
+/* Mobile fullscreen optimization */
+@media (max-width: 768px) {
+  .js-plotly-plot .modebar {
+    top: 50px !important;  /* Below exit button */
+  }
+  
+  .js-plotly-plot .modebar-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+}
+/* ========== PLOTLY FULLSCREEN MOBILE FIX ========== */
+/* Force Plotly modebar to be visible and horizontal in fullscreen portrait mode */
+
+/* Fullscreen graph - force modebar visibility */
+.js-plotly-plot[style*="position: fixed"] .modebar {
+  display: flex !important;
+  flex-direction: row !important;
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  z-index: 2001 !important;
+  background: rgba(20, 41, 80, 0.95) !important;
+  border-radius: 4px !important;
+  padding: 4px !important;
+}
+
+/* Force horizontal layout for all modebar buttons in fullscreen */
+.js-plotly-plot[style*="position: fixed"] .modebar-group {
+  display: flex !important;
+  flex-direction: row !important;
+  margin: 0 2px !important;
+}
+
+/* Ensure buttons are properly sized and visible */
+.js-plotly-plot[style*="position: fixed"] .modebar-btn {
+  width: 32px !important;
+  height: 32px !important;
+  margin: 1px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Mobile portrait specific fixes */
+@media (max-width: 768px) and (orientation: portrait) {
+  .js-plotly-plot[style*="position: fixed"] .modebar {
+    top: 15px !important;
+    right: 15px !important;
+    flex-wrap: wrap !important;
+    max-width: calc(100vw - 30px) !important;
+  }
+}

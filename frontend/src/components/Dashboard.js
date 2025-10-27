@@ -45,6 +45,7 @@ function Dashboard() {
   // NEW: Add mobile detection and filter collapse state
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [filtersOpen, setFiltersOpen] = useState(window.innerWidth > 768);
+  const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
   
   useEffect(() => {
     const handleResize = () => {
@@ -806,36 +807,72 @@ function Dashboard() {
     return {
       data: traces,
       layout: {
-        title: filters.dataType === 'tides' ? 'Tidal Data' : `Sea Level Monitoring`,
+        title: {
+          text: filters.dataType === 'tides' ? 'Tide Levels' : 'Sea Level Over Time',
+          font: { 
+            color: 'white',
+            size: isGraphFullscreen ? 20 : (isMobile ? 14 : 16)  // Bigger title in fullscreen
+          }
+        },
         plot_bgcolor: '#142950',
         paper_bgcolor: '#142950',
         font: { color: 'white' },
+        
         xaxis: { 
           title: 'Date/Time', 
           color: 'white', 
           gridcolor: '#1e3c72',
-          range: currentLayout?.xaxis?.range
+          range: currentLayout?.xaxis?.range,
+          tickfont: { 
+            size: isGraphFullscreen ? 12 : (isMobile ? 9 : 10)  // Bigger ticks in fullscreen
+          }
         },
         yaxis: { 
           title: filters.dataType === 'tides' ? 'Tide Level (m)' : 'Sea Level (m)', 
           color: 'white', 
           gridcolor: '#1e3c72',
-          range: currentLayout?.yaxis?.range
+          range: currentLayout?.yaxis?.range,
+          tickfont: { 
+            size: isGraphFullscreen ? 12 : (isMobile ? 9 : 10)  // Bigger ticks in fullscreen
+          }
         },
-        margin: { t: 50, r: 20, b: 50, l: 60 },
+        
+        // ✅ Fullscreen-aware margins
+        margin: isGraphFullscreen 
+          ? { l: 60, r: 40, t: 60, b: 60 }  // More space in fullscreen
+          : { t: 50, r: 20, b: 50, l: 60 },  // Compact normally
+        
         height: 400,
         showlegend: true,
         legend: {
-          x: 0,
-          y: 1,
+          orientation: isGraphFullscreen ? 'h' : 'v',  // Horizontal legend in fullscreen
+          y: isGraphFullscreen ? -0.15 : 1,
+          x: isGraphFullscreen ? 0.5 : 0,
+          xanchor: isGraphFullscreen ? 'center' : 'left',
+          font: { 
+            color: 'white',
+            size: isGraphFullscreen ? 11 : (isMobile ? 9 : 10)
+          },
           bgcolor: 'rgba(20, 41, 80, 0.8)',
           bordercolor: '#2a4a8c',
           borderwidth: 1
         },
+        
+        // ✅ MOBILE & FULLSCREEN SETTINGS:
+        dragmode: isMobile ? 'pan' : 'zoom',  // Mobile-specific dragmode
+        hovermode: 'closest',
+        
+        // Mobile-optimized modebar - ALWAYS HORIZONTAL
+        modebar: {
+          orientation: 'h',  // Always horizontal on all devices
+          bgcolor: 'rgba(20, 41, 80, 0.95)',
+          color: 'white',
+          activecolor: '#3b82f6'
+        },
         uirevision: 'constant'
       }
     };
-  }, [graphData, filters.dataType, selectedStations, filters.showAnomalies, filters.trendline, filters.analysisType, predictions, calculateTrendline, calculateAnalysis]);
+  }, [graphData, filters.dataType, selectedStations, filters.showAnomalies, filters.trendline, filters.analysisType, predictions, calculateTrendline, calculateAnalysis, isMobile, isGraphFullscreen]);
 
   // Export functions
   const exportGraph = () => {
@@ -902,6 +939,18 @@ function Dashboard() {
 
     XLSX.writeFile(workbook, `sea_level_data_${selectedStations.join('_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
+
+  // Fullscreen toggle function
+  const toggleGraphFullscreen = useCallback(() => {
+    setIsGraphFullscreen(prev => !prev);
+    
+    // Re-render Plotly after transition
+    setTimeout(() => {
+      if (plotRef.current?.el) {
+        window.Plotly.Plots.resize(plotRef.current.el);
+      }
+    }, 300);
+  }, []);
 
   // Map component
   const MapView = useCallback(() => {
@@ -1226,11 +1275,15 @@ function Dashboard() {
                   isMobile={isMobile}
                 />
               </Col>
-              {!isMobile && (
-                <Col lg={4} md={8} sm={12}>
-                  <WarningsCard apiBaseUrl={API_BASE_URL} />
-                </Col>
-              )}
+              <Col 
+                xs={12}
+                sm={12}
+                md={12}
+                lg={4}
+                className="mb-2"
+              >
+                <WarningsCard apiBaseUrl={API_BASE_URL} />
+              </Col>
             </Row>
 
             {/* Tabs */}
@@ -1254,14 +1307,87 @@ function Dashboard() {
                         </div>
                       </div>
                     ) : graphData.length > 0 ? (
-                      <Plot
-                        ref={plotRef}
-                        data={createPlot.data}
-                        layout={createPlot.layout}
-                        config={{ responsive: true }}
-                        style={{ width: '100%', height: 'clamp(300px, 50vh, 500px)' }}
-                        useResizeHandler={true}
-                      />
+                      <>
+                        {/* Plotly Graph with conditional fullscreen */}
+                        <div 
+                          style={{
+                            position: isGraphFullscreen ? 'fixed' : 'relative',
+                            top: isGraphFullscreen ? 0 : 'auto',
+                            left: isGraphFullscreen ? 0 : 'auto',
+                            width: isGraphFullscreen ? '100vw' : '100%',
+                            height: isGraphFullscreen ? '100vh' : 'clamp(300px, 50vh, 500px)',
+                            zIndex: isGraphFullscreen ? 1999 : 'auto',
+                            backgroundColor: isGraphFullscreen ? '#0c1c35' : 'transparent',
+                            transition: 'all 0.3s ease'
+                          }}
+                        >
+                          <Plot
+                            ref={plotRef}
+                            data={createPlot.data}
+                            layout={{
+                              ...createPlot.layout,
+                              height: isGraphFullscreen ? (window.innerHeight - 60) : undefined  // Leave space for exit button
+                            }}
+                            config={{
+                              responsive: true,
+                              displayModeBar: true,
+                              displaylogo: false,
+                              modeBarButtonsToAdd: [],
+                              modeBarButtonsToRemove: isGraphFullscreen ? [] : ['select2d', 'lasso2d'],
+                              scrollZoom: true,  // Always enable pinch-zoom
+                              doubleClick: 'reset',
+                              showTips: true,
+                              toImageButtonOptions: {
+                                format: 'png',
+                                filename: 'sea_level_graph',
+                                height: 1080,
+                                width: 1920
+                              }
+                            }}
+                            style={{ 
+                              width: '100%', 
+                              height: '100%'
+                            }}
+                            useResizeHandler={true}
+                          />
+                        </div>
+
+                        {/* Fullscreen Controls - Below Graph */}
+                        {!isGraphFullscreen && (
+                          <div className="mt-2 text-center">
+                            <Button 
+                              variant="outline-primary"
+                              size="sm"
+                              className="py-1"
+                              onClick={toggleGraphFullscreen}
+                              style={{ fontSize: '0.75rem' }}
+                            >
+                              ⛶ Full Screen
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Fullscreen Exit Button - Bottom of screen */}
+                        {isGraphFullscreen && (
+                          <div style={{
+                            position: 'fixed',
+                            bottom: '20px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            zIndex: 2000
+                          }}>
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              className="py-1"
+                              onClick={toggleGraphFullscreen}
+                              style={{ fontSize: '0.75rem' }}
+                            >
+                              ✕ Exit Full Screen
+                            </Button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="text-center p-5">
                         <p>No data to display. Select a station to view data.</p>
