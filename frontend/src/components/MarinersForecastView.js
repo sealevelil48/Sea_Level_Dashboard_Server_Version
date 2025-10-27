@@ -177,27 +177,38 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     );
   }
 
-  // FIXED: Proper table scrolling with nested divs
+  // ✅ FIXED: Mobile horizontal scroll with escape hatch
   const TableView = () => (
-    <div>
+    <div style={{ 
+      width: '100%',
+      maxWidth: '100vw',
+      position: 'relative',
+      margin: isMobile ? '0 -12px' : '0',  // Escape card padding on mobile
+      padding: isMobile ? '0 12px' : '0',
+      isolation: 'isolate'
+    }}>
       {/* OUTER CONTAINER: Vertical scroll only */}
       <div 
         style={{ 
           maxHeight: isMobile ? '400px' : '500px',
           overflowY: 'auto',
-          overflowX: 'hidden',
+          overflowX: 'clip',
           marginBottom: '15px',
           border: '1px solid #2a4a8c',
-          borderRadius: '8px'
+          borderRadius: '8px',
+          position: 'relative'
         }}
       >
-        {/* INNER CONTAINER: Horizontal scroll only */}
+        {/* INNER CONTAINER: Horizontal scroll enabled */}
         <div 
           style={{ 
-            overflowX: 'auto',
+            overflowX: 'scroll',
             overflowY: 'visible',
             WebkitOverflowScrolling: 'touch',
-            width: '100%'
+            width: '100%',
+            position: 'relative',
+            scrollbarWidth: 'thin',
+            msOverflowStyle: 'scrollbar'
           }}
         >
           <Table 
@@ -209,7 +220,10 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
             style={{
               marginBottom: 0,
               minWidth: isMobile ? '900px' : '1100px',
-              width: '100%'
+              width: 'max-content',
+              display: 'table',
+              borderCollapse: 'separate',
+              borderSpacing: 0
             }}
           >
             <thead style={{ 
@@ -219,26 +233,26 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
               backgroundColor: '#1e3c72'
             }}>
               <tr>
-                <th style={{ minWidth: '150px', whiteSpace: 'nowrap' }}>Location</th>
-                <th style={{ minWidth: '160px', whiteSpace: 'nowrap' }}>Period</th>
-                <th style={{ minWidth: '110px', whiteSpace: 'nowrap' }}>Pressure (hPa)</th>
-                <th style={{ minWidth: '180px', whiteSpace: 'nowrap' }}>Sea Status & Waves</th>
-                <th style={{ minWidth: '160px', whiteSpace: 'nowrap' }}>Wind</th>
-                <th style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Visibility (NM)</th>
-                <th style={{ minWidth: '140px', whiteSpace: 'nowrap' }}>Weather</th>
-                <th style={{ minWidth: '110px', whiteSpace: 'nowrap' }}>Swell</th>
+                <th style={{ minWidth: '150px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Location</th>
+                <th style={{ minWidth: '160px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Period</th>
+                <th style={{ minWidth: '110px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Pressure (hPa)</th>
+                <th style={{ minWidth: '180px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Sea Status & Waves</th>
+                <th style={{ minWidth: '160px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Wind</th>
+                <th style={{ minWidth: '120px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Visibility (NM)</th>
+                <th style={{ minWidth: '140px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Weather</th>
+                <th style={{ minWidth: '110px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Swell</th>
               </tr>
             </thead>
             <tbody>
               {forecastData.locations.map((location) =>
                 location.forecasts.map((forecast, idx) => (
                   <tr key={`${location.id}-${idx}`}>
-                    <td style={{ whiteSpace: 'nowrap' }}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 8px' }}>
                       <strong>{location.name_eng}</strong>
                       <br />
                       <small className="text-muted">{location.name_heb}</small>
                     </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
+                    <td style={{ whiteSpace: 'nowrap', padding: '10px 8px' }}>
                       <small>
                         {formatDateTime(forecast.from)}
                         <br />
@@ -247,27 +261,27 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
                         {formatDateTime(forecast.to)}
                       </small>
                     </td>
-                    <td>{forecast.elements['Pressure'] || 'N/A'}</td>
-                    <td>
+                    <td style={{ padding: '10px 8px' }}>{forecast.elements['Pressure'] || 'N/A'}</td>
+                    <td style={{ padding: '10px 8px' }}>
                       {forecast.elements['Sea status and waves height'] ? 
                         translateSeaStatus(forecast.elements['Sea status and waves height']) : 
                         'N/A'
                       }
                     </td>
-                    <td>
+                    <td style={{ padding: '10px 8px' }}>
                       {forecast.elements['Wind direction and speed'] ? 
                         translateWind(forecast.elements['Wind direction and speed']) : 
                         'N/A'
                       }
                     </td>
-                    <td>{forecast.elements['Visibility'] || 'N/A'}</td>
-                    <td>
+                    <td style={{ padding: '10px 8px' }}>{forecast.elements['Visibility'] || 'N/A'}</td>
+                    <td style={{ padding: '10px 8px' }}>
                       {forecast.elements['Weather code'] ? 
                         translateWeatherCode(forecast.elements['Weather code']) : 
                         'N/A'
                       }
                     </td>
-                    <td>{forecast.elements['Swell'] || 'N/A'}</td>
+                    <td style={{ padding: '10px 8px' }}>{forecast.elements['Swell'] || 'N/A'}</td>
                   </tr>
                 ))
               )}
