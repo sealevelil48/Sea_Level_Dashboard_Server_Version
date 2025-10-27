@@ -653,6 +653,21 @@ div[style*="height: 500px"] {
   }
 }
 
+/* ========== MOBILE TABLE SCROLL FIX ========== */
+.mobile-table-scroll {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  width: 100% !important;
+  display: block !important;
+}
+
+.mobile-table-scroll table {
+  width: auto !important;
+  min-width: 100% !important;
+  display: table !important;
+}
+
 /* ========== FIX BOOTSTRAP CONTAINER OVERFLOW ========== */
 .container-fluid {
   max-width: 100%;
