@@ -177,124 +177,83 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     );
   }
 
-  // ✅ ULTIMATE FIX: Full viewport width, breaks free from ALL parents
+  // ✅ FIXED: Simple scroll like Historical table
   const TableView = () => (
     <div style={{ 
-      position: 'relative',
-      left: isMobile ? '50%' : '0',
-      right: isMobile ? '50%' : 'auto',
-      marginLeft: isMobile ? '-50vw' : '0',
-      marginRight: isMobile ? '-50vw' : '0',
-      width: isMobile ? '100vw' : '100%',
-      maxWidth: isMobile ? '100vw' : 'none',
-      paddingLeft: isMobile ? '8px' : '0',
-      paddingRight: isMobile ? '8px' : '0',
-      boxSizing: 'border-box'
+      overflowX: 'auto',
+      overflowY: 'hidden',
+      WebkitOverflowScrolling: 'touch',
+      maxHeight: isMobile ? '400px' : '500px'
     }}>
-      {/* OUTER CONTAINER: Vertical scroll only */}
-      <div 
-        style={{ 
-          maxHeight: isMobile ? '400px' : '500px',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          marginBottom: '15px',
-          border: '1px solid #2a4a8c',
-          borderRadius: '8px',
-          backgroundColor: '#142950'
+      <Table 
+        striped 
+        bordered 
+        hover 
+        responsive
+        variant="dark" 
+        size="sm"
+        className="dash-table"
+        style={{
+          minWidth: '1100px',
+          marginBottom: 0
         }}
       >
-        {/* INNER CONTAINER: Horizontal scroll FORCED */}
-        <div 
-          style={{ 
-            overflowX: 'scroll',
-            overflowY: 'hidden',
-            WebkitOverflowScrolling: 'touch',
-            width: '100%',
-            position: 'relative',
-            touchAction: 'pan-x pan-y',
-            scrollSnapType: 'none',
-            scrollBehavior: 'auto',
-            overscrollBehaviorX: 'contain'
-          }}
-        >
-          <Table 
-            striped 
-            bordered 
-            hover 
-            variant="dark" 
-            size="sm"
-            style={{
-              marginBottom: 0,
-              minWidth: '1100px',
-              width: 'max-content',
-              display: 'table',
-              tableLayout: 'auto',
-              overflowAnchor: 'none'
-            }}
-          >
-            <thead style={{ 
-              position: 'sticky', 
-              top: 0, 
-              zIndex: 10,
-              backgroundColor: '#1e3c72'
-            }}>
-              <tr>
-                <th style={{ minWidth: '150px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Location</th>
-                <th style={{ minWidth: '160px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Period</th>
-                <th style={{ minWidth: '110px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Pressure (hPa)</th>
-                <th style={{ minWidth: '180px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Sea Status & Waves</th>
-                <th style={{ minWidth: '160px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Wind</th>
-                <th style={{ minWidth: '120px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Visibility (NM)</th>
-                <th style={{ minWidth: '140px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Weather</th>
-                <th style={{ minWidth: '110px', padding: '12px 8px', whiteSpace: 'nowrap' }}>Swell</th>
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Period</th>
+            <th>Pressure (hPa)</th>
+            <th>Sea Status & Waves</th>
+            <th>Wind</th>
+            <th>Visibility (NM)</th>
+            <th>Weather</th>
+            <th>Swell</th>
+          </tr>
+        </thead>
+        <tbody>
+          {forecastData.locations.map((location) =>
+            location.forecasts.map((forecast, idx) => (
+              <tr key={`${location.id}-${idx}`}>
+                <td>
+                  <strong>{location.name_eng}</strong>
+                  <br />
+                  <small className="text-muted">{location.name_heb}</small>
+                </td>
+                <td>
+                  <small>
+                    {formatDateTime(forecast.from)}
+                    <br />
+                    to
+                    <br />
+                    {formatDateTime(forecast.to)}
+                  </small>
+                </td>
+                <td>{forecast.elements['Pressure'] || 'N/A'}</td>
+                <td>
+                  {forecast.elements['Sea status and waves height'] ? 
+                    translateSeaStatus(forecast.elements['Sea status and waves height']) : 
+                    'N/A'
+                  }
+                </td>
+                <td>
+                  {forecast.elements['Wind direction and speed'] ? 
+                    translateWind(forecast.elements['Wind direction and speed']) : 
+                    'N/A'
+                  }
+                </td>
+                <td>{forecast.elements['Visibility'] || 'N/A'}</td>
+                <td>
+                  {forecast.elements['Weather code'] ? 
+                    translateWeatherCode(forecast.elements['Weather code']) : 
+                    'N/A'
+                  }
+                </td>
+                <td>{forecast.elements['Swell'] || 'N/A'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {forecastData.locations.map((location) =>
-                location.forecasts.map((forecast, idx) => (
-                  <tr key={`${location.id}-${idx}`}>
-                    <td style={{ whiteSpace: 'nowrap', padding: '10px 8px' }}>
-                      <strong>{location.name_eng}</strong>
-                      <br />
-                      <small className="text-muted">{location.name_heb}</small>
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap', padding: '10px 8px' }}>
-                      <small>
-                        {formatDateTime(forecast.from)}
-                        <br />
-                        to
-                        <br />
-                        {formatDateTime(forecast.to)}
-                      </small>
-                    </td>
-                    <td style={{ padding: '10px 8px' }}>{forecast.elements['Pressure'] || 'N/A'}</td>
-                    <td style={{ padding: '10px 8px' }}>
-                      {forecast.elements['Sea status and waves height'] ? 
-                        translateSeaStatus(forecast.elements['Sea status and waves height']) : 
-                        'N/A'
-                      }
-                    </td>
-                    <td style={{ padding: '10px 8px' }}>
-                      {forecast.elements['Wind direction and speed'] ? 
-                        translateWind(forecast.elements['Wind direction and speed']) : 
-                        'N/A'
-                      }
-                    </td>
-                    <td style={{ padding: '10px 8px' }}>{forecast.elements['Visibility'] || 'N/A'}</td>
-                    <td style={{ padding: '10px 8px' }}>
-                      {forecast.elements['Weather code'] ? 
-                        translateWeatherCode(forecast.elements['Weather code']) : 
-                        'N/A'
-                      }
-                    </td>
-                    <td style={{ padding: '10px 8px' }}>{forecast.elements['Swell'] || 'N/A'}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </Table>
-        </div>
-      </div>
+            ))
+          )}
+        </tbody>
+      </Table>
     </div>
   );
 
