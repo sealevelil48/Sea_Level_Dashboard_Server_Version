@@ -1,7 +1,6 @@
-// frontend/src/components/GraphView.js - Enhanced with Kalman filter support
 import React, { useState, useEffect, useMemo } from 'react';
 import Plot from 'react-plotly.js';
-import moment from 'moment';
+import { Button } from 'react-bootstrap';
 import apiService from '../services/apiService';
 
 // Helper for linear regression (existing)
@@ -33,6 +32,7 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Track window resize for responsive layout
   useEffect(() => {
@@ -44,6 +44,49 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
   // Determine if mobile view
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
+
+  // Handle fullscreen toggle
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      const elem = document.getElementById('graph-container');
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+  };
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || 
+                              document.webkitFullscreenElement || 
+                              document.msFullscreenElement));
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -347,68 +390,70 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
         text: `Sea Level Analysis - ${stationName}`,
         font: { 
           color: 'white', 
-          size: isMobile ? 14 : (isTablet ? 16 : 20) 
+          size: isFullscreen ? 24 : (isMobile ? 14 : (isTablet ? 16 : 20))
         },
-        x: isMobile ? 0 : 0.5,
-        xanchor: isMobile ? 'left' : 'center'
+        x: isMobile && !isFullscreen ? 0 : 0.5,
+        xanchor: isMobile && !isFullscreen ? 'left' : 'center'
       },
       plot_bgcolor: '#1a2332',
       paper_bgcolor: '#0c1c35',
       font: { 
         color: 'white',
-        size: isMobile ? 10 : (isTablet ? 11 : 12)
+        size: isFullscreen ? 14 : (isMobile ? 10 : (isTablet ? 11 : 12))
       },
       xaxis: {
-        title: isMobile ? '' : 'Date/Time', // Hide axis titles on mobile
+        title: isMobile && !isFullscreen ? '' : 'Date/Time',
         color: 'white',
         gridcolor: '#2a3f5f',
         showgrid: true,
         zeroline: false,
-        tickangle: isMobile ? -45 : 0,
-        tickfont: { size: isMobile ? 9 : 11 }
+        tickangle: isMobile && !isFullscreen ? -45 : 0,
+        tickfont: { size: isFullscreen ? 12 : (isMobile ? 9 : 11) }
       },
       yaxis: {
-        title: isMobile ? 'm' : 'Sea Level (m)',
+        title: isMobile && !isFullscreen ? 'm' : 'Sea Level (m)',
         color: 'white',
         gridcolor: '#2a3f5f',
         showgrid: true,
         zeroline: true,
         zerolinecolor: '#666',
-        tickfont: { size: isMobile ? 9 : 11 }
+        tickfont: { size: isFullscreen ? 12 : (isMobile ? 9 : 11) }
       },
       legend: {
-        x: isMobile ? 0 : 0,
-        y: isMobile ? -0.2 : 1,
-        orientation: isMobile ? 'h' : 'v',
+        x: isMobile && !isFullscreen ? 0 : 0,
+        y: isMobile && !isFullscreen ? -0.2 : 1,
+        orientation: isMobile && !isFullscreen ? 'h' : 'v',
         bgcolor: 'rgba(0,0,0,0.5)',
         bordercolor: '#444',
         borderwidth: 1,
-        font: { size: isMobile ? 9 : 11 }
+        font: { size: isFullscreen ? 12 : (isMobile ? 9 : 11) }
       },
       hovermode: 'x unified',
-      margin: isMobile 
-        ? { l: 40, r: 10, t: 40, b: 60 }  // Mobile margins
-        : isTablet
-        ? { l: 50, r: 20, t: 50, b: 50 }  // Tablet margins
-        : { l: 60, r: 30, t: 60, b: 60 }, // Desktop margins
+      margin: isFullscreen 
+        ? { l: 80, r: 40, t: 80, b: 80 }
+        : (isMobile 
+          ? { l: 40, r: 10, t: 40, b: 60 }
+          : isTablet
+          ? { l: 50, r: 20, t: 50, b: 50 }
+          : { l: 60, r: 30, t: 60, b: 60 })
       autosize: true,
       showlegend: true
     };
-  }, [filters.station, isMobile, isTablet]);
+  }, [filters.station, isMobile, isTablet, isFullscreen]);
 
   const config = useMemo(() => ({
-    displayModeBar: !isMobile, // Hide toolbar on mobile
+    displayModeBar: !isMobile || isFullscreen,
     displaylogo: false,
     responsive: true,
-    modeBarButtonsToRemove: isMobile ? [] : ['lasso2d', 'select2d'],
+    modeBarButtonsToRemove: isMobile && !isFullscreen ? [] : ['lasso2d', 'select2d'],
     toImageButtonOptions: {
       format: 'png',
       filename: `sea_level_${filters.station || 'multiple'}_${new Date().toISOString().split('T')[0]}`,
-      height: isMobile ? 400 : 600,
-      width: isMobile ? 800 : 1200,
+      height: isFullscreen ? 1080 : (isMobile ? 400 : 600),
+      width: isFullscreen ? 1920 : (isMobile ? 800 : 1200),
       scale: 2
     }
-  }), [isMobile, filters.station]);
+  }), [isMobile, isFullscreen, filters.station]);
 
   if (isLoading) {
     return (
@@ -449,14 +494,43 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
   }
 
   return (
-    <div style={{ width: '100%', height: '100%' }}>
+    <div 
+      id="graph-container"
+      style={{ 
+        width: '100%', 
+        height: '100%',
+        position: 'relative',
+        backgroundColor: isFullscreen ? '#0c1c35' : 'transparent'
+      }}
+    >
+      {/* Fullscreen button - Only on mobile */}
+      {isMobile && (
+        <Button
+          variant={isFullscreen ? 'danger' : 'outline-primary'}
+          size="sm"
+          onClick={toggleFullscreen}
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            zIndex: 1000,
+            fontSize: '0.75rem',
+            padding: '4px 8px'
+          }}
+        >
+          {isFullscreen ? '✕ Exit' : '⛶ Fullscreen'}
+        </Button>
+      )}
+
       <Plot
         data={graphData}
         layout={layout}
         config={config}
         style={{ 
           width: '100%', 
-          height: isMobile ? '350px' : (isTablet ? '450px' : '500px')
+          height: isFullscreen 
+            ? '100vh' 
+            : (isMobile ? '350px' : (isTablet ? '450px' : '500px'))
         }}
         useResizeHandler={true}
       />

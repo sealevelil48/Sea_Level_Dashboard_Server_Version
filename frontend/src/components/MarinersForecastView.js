@@ -5,7 +5,10 @@ const translateWind = (windStr) => {
   if (!windStr) return windStr;
   const parts = windStr.split('/');
   if (parts.length !== 2) return windStr;
-  const directions = {'045': 'NE', '135': 'SE', '225': 'SW', '315': 'NW', '180': 'S', '000': 'N', '090': 'E', '270': 'W'};
+  const directions = {
+    '045': 'NE', '135': 'SE', '225': 'SW', '315': 'NW', 
+    '180': 'S', '000': 'N', '090': 'E', '270': 'W'
+  };
   const dirPart = parts[0].trim();
   let dirText = dirPart;
   if (dirPart.includes('-')) {
@@ -18,7 +21,13 @@ const translateWind = (windStr) => {
 };
 
 const translateWeatherCode = (code) => {
-  const codes = {'1220': 'Partly Cloudy', '1250': 'Mostly Cloudy', '1000': 'Clear', '4001': 'Rain', '8000': 'Thunderstorm'};
+  const codes = {
+    '1220': 'Partly Cloudy', 
+    '1250': 'Mostly Cloudy', 
+    '1000': 'Clear', 
+    '4001': 'Rain', 
+    '8000': 'Thunderstorm'
+  };
   return codes[code] || code;
 };
 
@@ -28,7 +37,12 @@ const translateSeaStatus = (seaStr) => {
   if (parts.length !== 2) return seaStr;
   const code = parts[0].trim();
   const height = parts[1].trim();
-  const seaCodes = {'10': 'Calm', '20': 'Smooth', '30': 'Slight', '40': 'Light', '50': 'Slight', '60': 'Moderate', '70': 'Rough', '80': 'Very Rough', '90': 'High', '95': 'Very High'};
+  const seaCodes = {
+    '10': 'Calm', '20': 'Smooth', '30': 'Slight', 
+    '40': 'Light', '50': 'Slight', '60': 'Moderate', 
+    '70': 'Rough', '80': 'Very Rough', '90': 'High', 
+    '95': 'Very High'
+  };
   const description = seaCodes[code] || code;
   return `${description} (${height} cm)`;
 };
@@ -76,15 +90,6 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     return () => clearInterval(interval);
   }, [fetchForecastData]);
 
-  useEffect(() => {
-    const handleExportEvent = () => {
-      exportTable();
-    };
-    
-    window.addEventListener('exportMarinersTable', handleExportEvent);
-    return () => window.removeEventListener('exportMarinersTable', handleExportEvent);
-  }, [forecastData]);
-
   const formatDateTime = (dateTimeStr) => {
     return new Date(dateTimeStr).toLocaleString('en-IL', {
       year: 'numeric',
@@ -95,11 +100,15 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     });
   };
 
-  const exportTable = () => {
+  // SINGLE exportTable function - called by Dashboard's Export Table button
+  const exportTable = useCallback(() => {
     if (!forecastData?.locations) return;
     
     const csvData = [];
-    csvData.push(['Location', 'Period From', 'Period To', 'Pressure (hPa)', 'Sea Status & Waves', 'Wind', 'Visibility (NM)', 'Weather', 'Swell']);
+    csvData.push([
+      'Location', 'Period From', 'Period To', 'Pressure (hPa)', 
+      'Sea Status & Waves', 'Wind', 'Visibility (NM)', 'Weather', 'Swell'
+    ]);
     
     forecastData.locations.forEach(location => {
       location.forecasts.forEach(forecast => {
@@ -108,16 +117,22 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
           formatDateTime(forecast.from),
           formatDateTime(forecast.to),
           forecast.elements['Pressure'] || 'N/A',
-          forecast.elements['Sea status and waves height'] ? translateSeaStatus(forecast.elements['Sea status and waves height']) : 'N/A',
-          forecast.elements['Wind direction and speed'] ? translateWind(forecast.elements['Wind direction and speed']) : 'N/A',
+          forecast.elements['Sea status and waves height'] ? 
+            translateSeaStatus(forecast.elements['Sea status and waves height']) : 'N/A',
+          forecast.elements['Wind direction and speed'] ? 
+            translateWind(forecast.elements['Wind direction and speed']) : 'N/A',
           forecast.elements['Visibility'] || 'N/A',
-          forecast.elements['Weather code'] ? translateWeatherCode(forecast.elements['Weather code']) : 'N/A',
+          forecast.elements['Weather code'] ? 
+            translateWeatherCode(forecast.elements['Weather code']) : 'N/A',
           forecast.elements['Swell'] || 'N/A'
         ]);
       });
     });
     
-    const csvContent = csvData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const csvContent = csvData.map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+    
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -125,7 +140,17 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     a.download = `mariners_forecast_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [forecastData]);
+
+  // Listen for export event from Dashboard's Export Table button
+  useEffect(() => {
+    const handleExportEvent = () => {
+      exportTable();
+    };
+    
+    window.addEventListener('exportMarinersTable', handleExportEvent);
+    return () => window.removeEventListener('exportMarinersTable', handleExportEvent);
+  }, [exportTable]);
 
   if (loading) {
     return (
@@ -152,36 +177,27 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     );
   }
 
+  // FIXED: Proper table scrolling with nested divs
   const TableView = () => (
     <div>
-      {/* Export button */}
-      <div className="mb-2 text-end">
-        <Button 
-          variant="outline-success" 
-          size="sm" 
-          onClick={exportTable}
-        >
-          📥 Export CSV
-        </Button>
-      </div>
-
-      {/* OUTER DIV: Vertical scroll container */}
+      {/* OUTER CONTAINER: Vertical scroll only */}
       <div 
         style={{ 
           maxHeight: isMobile ? '400px' : '500px',
           overflowY: 'auto',
-          marginBottom: '15px'
+          overflowX: 'hidden',
+          marginBottom: '15px',
+          border: '1px solid #2a4a8c',
+          borderRadius: '8px'
         }}
       >
-        {/* INNER DIV: Horizontal scroll wrapper - CRITICAL FIX */}
+        {/* INNER CONTAINER: Horizontal scroll only */}
         <div 
-          className="table-responsive"
           style={{ 
             overflowX: 'auto',
-            overflowY: 'visible',  // CRITICAL: Don't block vertical scroll
+            overflowY: 'visible',
             WebkitOverflowScrolling: 'touch',
-            width: '100%',
-            display: 'block'
+            width: '100%'
           }}
         >
           <Table 
@@ -192,31 +208,37 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
             size="sm"
             style={{
               marginBottom: 0,
-              minWidth: isMobile ? '800px' : '1000px'  // Force horizontal scroll
+              minWidth: isMobile ? '900px' : '1100px',
+              width: '100%'
             }}
           >
-            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+            <thead style={{ 
+              position: 'sticky', 
+              top: 0, 
+              zIndex: 10,
+              backgroundColor: '#1e3c72'
+            }}>
               <tr>
-                <th style={{ minWidth: '120px' }}>Location</th>
-                <th style={{ minWidth: '140px' }}>Period</th>
-                <th style={{ minWidth: '100px' }}>Pressure (hPa)</th>
-                <th style={{ minWidth: '150px' }}>Sea Status & Waves</th>
-                <th style={{ minWidth: '140px' }}>Wind</th>
-                <th style={{ minWidth: '100px' }}>Visibility (NM)</th>
-                <th style={{ minWidth: '120px' }}>Weather</th>
-                <th style={{ minWidth: '100px' }}>Swell</th>
+                <th style={{ minWidth: '150px', whiteSpace: 'nowrap' }}>Location</th>
+                <th style={{ minWidth: '160px', whiteSpace: 'nowrap' }}>Period</th>
+                <th style={{ minWidth: '110px', whiteSpace: 'nowrap' }}>Pressure (hPa)</th>
+                <th style={{ minWidth: '180px', whiteSpace: 'nowrap' }}>Sea Status & Waves</th>
+                <th style={{ minWidth: '160px', whiteSpace: 'nowrap' }}>Wind</th>
+                <th style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Visibility (NM)</th>
+                <th style={{ minWidth: '140px', whiteSpace: 'nowrap' }}>Weather</th>
+                <th style={{ minWidth: '110px', whiteSpace: 'nowrap' }}>Swell</th>
               </tr>
             </thead>
             <tbody>
               {forecastData.locations.map((location) =>
                 location.forecasts.map((forecast, idx) => (
                   <tr key={`${location.id}-${idx}`}>
-                    <td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
                       <strong>{location.name_eng}</strong>
                       <br />
                       <small className="text-muted">{location.name_heb}</small>
                     </td>
-                    <td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
                       <small>
                         {formatDateTime(forecast.from)}
                         <br />
@@ -226,10 +248,25 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
                       </small>
                     </td>
                     <td>{forecast.elements['Pressure'] || 'N/A'}</td>
-                    <td>{forecast.elements['Sea status and waves height'] ? translateSeaStatus(forecast.elements['Sea status and waves height']) : 'N/A'}</td>
-                    <td>{forecast.elements['Wind direction and speed'] ? translateWind(forecast.elements['Wind direction and speed']) : 'N/A'}</td>
+                    <td>
+                      {forecast.elements['Sea status and waves height'] ? 
+                        translateSeaStatus(forecast.elements['Sea status and waves height']) : 
+                        'N/A'
+                      }
+                    </td>
+                    <td>
+                      {forecast.elements['Wind direction and speed'] ? 
+                        translateWind(forecast.elements['Wind direction and speed']) : 
+                        'N/A'
+                      }
+                    </td>
                     <td>{forecast.elements['Visibility'] || 'N/A'}</td>
-                    <td>{forecast.elements['Weather code'] ? translateWeatherCode(forecast.elements['Weather code']) : 'N/A'}</td>
+                    <td>
+                      {forecast.elements['Weather code'] ? 
+                        translateWeatherCode(forecast.elements['Weather code']) : 
+                        'N/A'
+                      }
+                    </td>
                     <td>{forecast.elements['Swell'] || 'N/A'}</td>
                   </tr>
                 ))
@@ -238,27 +275,20 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
           </Table>
         </div>
       </div>
-
-      {/* Mobile scroll hint */}
-      {isMobile && (
-        <div 
-          className="text-center text-muted" 
-          style={{ fontSize: '0.85rem', marginTop: '10px' }}
-        >
-          👆 Swipe left/right to see all columns
-        </div>
-      )}
     </div>
   );
 
   return (
     <div>
+      {/* Header */}
       <Card className="mb-3">
         <Card.Body>
           <Row>
             <Col>
-              <h5 className="mb-1">{forecastData.metadata?.title}</h5>
-              <small className="text-muted">
+              <h5 className="mb-1" style={{ fontSize: isMobile ? '1rem' : '1.25rem' }}>
+                {forecastData.metadata?.title}
+              </h5>
+              <small className="text-muted" style={{ fontSize: isMobile ? '0.75rem' : '0.875rem' }}>
                 {forecastData.metadata?.organization} | 
                 Issued: {formatDateTime(forecastData.metadata?.issue_datetime)}
               </small>
@@ -277,19 +307,33 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
         </Card.Body>
       </Card>
 
-      <Tabs activeKey={activeTab} onSelect={(k) => setActiveTab(k)} className="mb-3">
+      {/* Tabs */}
+      <Tabs 
+        activeKey={activeTab} 
+        onSelect={(k) => setActiveTab(k)} 
+        className="mb-3"
+      >
         <Tab eventKey="table" title="Table View">
           {activeTab === 'table' && <TableView />}
         </Tab>
+        
         <Tab eventKey="map" title="Map View">
-          <div style={{ width: '100%', height: 'clamp(400px, 60vh, 600px)', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
+          <div 
+            style={{ 
+              width: '100%', 
+              height: isMobile ? '350px' : 'clamp(400px, 60vh, 600px)', 
+              border: '1px solid #2a4a8c', 
+              borderRadius: '8px', 
+              overflow: 'hidden' 
+            }}
+          >
             {!iframeCreated && activeTab === 'map' && (() => {
               setIframeCreated(true);
               return null;
             })()}
             {iframeCreated && (
               <iframe
-                src={`${apiBaseUrl}/api/mariners-mapframe`}
+                src={`${apiBaseUrl}/mariners-mapframe`}
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title="Mariners Forecast Map"
                 allow="geolocation; accelerometer; clipboard-write"
@@ -300,6 +344,7 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
         </Tab>
       </Tabs>
 
+      {/* IMS Copyright */}
       <div className="text-center mt-3">
         <small className="text-muted">
           <a 
