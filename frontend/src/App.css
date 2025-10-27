@@ -671,12 +671,18 @@ div[style*="height: 500px"] {
 /* ========== FIX BOOTSTRAP CONTAINER OVERFLOW ========== */
 .container-fluid {
   max-width: 100%;
-  overflow-x: hidden;
+  /* Removed overflow-x: hidden to allow horizontal scroll */
 }
 
 .row {
   margin-right: 0;
   margin-left: 0;
+  overflow-x: visible;
+}
+
+/* Allow specific components to scroll */
+.card-body {
+  overflow: visible !important;
 }
 
 /* ========== PRINT STYLES ========== */
