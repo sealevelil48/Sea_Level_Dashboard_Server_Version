@@ -177,49 +177,64 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
     );
   }
 
-  // ✅ FIXED: Simple scroll like Historical table
+  // ✅ FIXED: Full responsive table with proper scrolling
   const TableView = () => (
     <div style={{ 
       overflowX: 'auto',
       overflowY: 'hidden',
       WebkitOverflowScrolling: 'touch',
-      maxHeight: isMobile ? '400px' : '500px'
+      maxHeight: isMobile ? '400px' : '500px',
+      width: '100%',
+      position: 'relative',
+      touchAction: 'pan-x pan-y',
+      // Critical: Prevent snap-back on mobile
+      scrollBehavior: 'smooth',
+      overscrollBehavior: 'contain'
     }}>
       <Table 
         striped 
         bordered 
         hover 
-        responsive
         variant="dark" 
         size="sm"
         className="dash-table"
         style={{
-          minWidth: '1100px',
-          marginBottom: 0
+          // Desktop: Full width, Mobile: Fixed width for scroll
+          width: isMobile ? '800px' : '100%',
+          minWidth: isMobile ? '800px' : '100%',
+          marginBottom: 0,
+          tableLayout: isMobile ? 'fixed' : 'auto'  // Fixed on mobile, auto on desktop
         }}
       >
         <thead>
           <tr>
-            <th>Location</th>
-            <th>Period</th>
-            <th>Pressure (hPa)</th>
-            <th>Sea Status & Waves</th>
-            <th>Wind</th>
-            <th>Visibility (NM)</th>
-            <th>Weather</th>
-            <th>Swell</th>
+            <th style={{ width: isMobile ? '120px' : '18%', minWidth: isMobile ? '120px' : 'auto' }}>Location</th>
+            <th style={{ width: isMobile ? '140px' : '20%', minWidth: isMobile ? '140px' : 'auto' }}>Period</th>
+            <th style={{ width: isMobile ? '80px' : '10%', minWidth: isMobile ? '80px' : 'auto' }}>Pressure (hPa)</th>
+            <th style={{ width: isMobile ? '140px' : '22%', minWidth: isMobile ? '140px' : 'auto' }}>Sea Status & Waves</th>
+            <th style={{ width: isMobile ? '120px' : '15%', minWidth: isMobile ? '120px' : 'auto' }}>Wind</th>
+            <th style={{ width: isMobile ? '80px' : '8%', minWidth: isMobile ? '80px' : 'auto' }}>Visibility (NM)</th>
+            <th style={{ width: isMobile ? '100px' : '12%', minWidth: isMobile ? '100px' : 'auto' }}>Weather</th>
+            <th style={{ width: isMobile ? '80px' : '8%', minWidth: isMobile ? '80px' : 'auto' }}>Swell</th>
           </tr>
         </thead>
         <tbody>
           {forecastData.locations.map((location) =>
             location.forecasts.map((forecast, idx) => (
               <tr key={`${location.id}-${idx}`}>
-                <td>
-                  <strong>{location.name_eng}</strong>
+                <td style={{ 
+                  ...(isMobile ? { width: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {}),
+                  padding: isMobile ? '8px 4px' : '12px 8px'
+                }}>
+                  <strong style={{ fontSize: isMobile ? '0.8rem' : '0.9rem' }}>{location.name_eng}</strong>
                   <br />
-                  <small className="text-muted">{location.name_heb}</small>
+                  <small style={{ color: '#FFFFFF', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>{location.name_heb}</small>
                 </td>
-                <td>
+                <td style={{ 
+                  ...(isMobile ? { width: '140px' } : {}),
+                  fontSize: isMobile ? '0.7rem' : '0.8rem',
+                  padding: isMobile ? '8px 4px' : '12px 8px'
+                }}>
                   <small>
                     {formatDateTime(forecast.from)}
                     <br />
@@ -228,27 +243,54 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
                     {formatDateTime(forecast.to)}
                   </small>
                 </td>
-                <td>{forecast.elements['Pressure'] || 'N/A'}</td>
-                <td>
+                <td style={{ 
+                  ...(isMobile ? { width: '80px' } : {}),
+                  fontSize: isMobile ? '0.8rem' : '0.9rem',
+                  padding: isMobile ? '8px 4px' : '12px 8px',
+                  textAlign: 'center'
+                }}>{forecast.elements['Pressure'] || 'N/A'}</td>
+                <td style={{ 
+                  ...(isMobile ? { width: '140px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {}),
+                  fontSize: isMobile ? '0.7rem' : '0.8rem',
+                  padding: isMobile ? '8px 4px' : '12px 8px'
+                }}>
                   {forecast.elements['Sea status and waves height'] ? 
                     translateSeaStatus(forecast.elements['Sea status and waves height']) : 
                     'N/A'
                   }
                 </td>
-                <td>
+                <td style={{ 
+                  ...(isMobile ? { width: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {}),
+                  fontSize: isMobile ? '0.7rem' : '0.8rem',
+                  padding: isMobile ? '8px 4px' : '12px 8px'
+                }}>
                   {forecast.elements['Wind direction and speed'] ? 
                     translateWind(forecast.elements['Wind direction and speed']) : 
                     'N/A'
                   }
                 </td>
-                <td>{forecast.elements['Visibility'] || 'N/A'}</td>
-                <td>
+                <td style={{ 
+                  ...(isMobile ? { width: '80px' } : {}),
+                  fontSize: isMobile ? '0.8rem' : '0.9rem',
+                  padding: isMobile ? '8px 4px' : '12px 8px',
+                  textAlign: 'center'
+                }}>{forecast.elements['Visibility'] || 'N/A'}</td>
+                <td style={{ 
+                  ...(isMobile ? { width: '100px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {}),
+                  fontSize: isMobile ? '0.8rem' : '0.9rem',
+                  padding: isMobile ? '8px 4px' : '12px 8px'
+                }}>
                   {forecast.elements['Weather code'] ? 
                     translateWeatherCode(forecast.elements['Weather code']) : 
                     'N/A'
                   }
                 </td>
-                <td>{forecast.elements['Swell'] || 'N/A'}</td>
+                <td style={{ 
+                  ...(isMobile ? { width: '80px' } : {}),
+                  fontSize: isMobile ? '0.8rem' : '0.9rem',
+                  padding: isMobile ? '8px 4px' : '12px 8px',
+                  textAlign: 'center'
+                }}>{forecast.elements['Swell'] || 'N/A'}</td>
               </tr>
             ))
           )}
@@ -267,7 +309,10 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
               <h5 className="mb-1" style={{ fontSize: isMobile ? '1rem' : '1.25rem' }}>
                 {forecastData.metadata?.title}
               </h5>
-              <small className="text-muted" style={{ fontSize: isMobile ? '0.75rem' : '0.875rem' }}>
+              <small style={{ 
+                color: '#FFFFFF',
+                fontSize: isMobile ? '0.75rem' : '0.875rem' 
+              }}>
                 {forecastData.metadata?.organization} | 
                 Issued: {formatDateTime(forecastData.metadata?.issue_datetime)}
               </small>
@@ -312,7 +357,7 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
             })()}
             {iframeCreated && (
               <iframe
-                src={`${apiBaseUrl}/mariners-mapframe`}
+                src={`${apiBaseUrl}/api/mariners-mapframe`}
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title="Mariners Forecast Map"
                 allow="geolocation; accelerometer; clipboard-write"

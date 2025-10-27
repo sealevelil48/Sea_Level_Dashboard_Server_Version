@@ -484,15 +484,35 @@ async def get_mariners_forecast():
         
         logger.info(f"IMS response length: {len(response.content)} bytes")
         
-        # Try different encodings
+        # ✅ FIXED: Proper Hebrew encoding detection
         content = None
-        for encoding in ['iso-8859-1', 'utf-8', 'windows-1255']:
+        encodings_to_try = [
+            'windows-1255',  # Hebrew Windows (try FIRST)
+            'iso-8859-8',    # Hebrew ISO
+            'utf-8',         # UTF-8
+            'cp1255'         # Hebrew code page
+        ]
+
+        for encoding in encodings_to_try:
             try:
                 content = response.content.decode(encoding)
-                logger.info(f"Successfully decoded with {encoding}")
-                break
-            except UnicodeDecodeError:
+                logger.info(f"✅ Successfully decoded with {encoding}")
+                # Verify Hebrew characters are not mojibake
+                test_text = content[:500]
+                if 'ã' not in test_text and 'é' not in test_text:  # Common mojibake indicators
+                    logger.info(f"✅ Encoding {encoding} verified - no mojibake detected")
+                    break
+                else:
+                    logger.warning(f"⚠️ Encoding {encoding} produced mojibake, trying next...")
+                    content = None
+            except (UnicodeDecodeError, AttributeError) as e:
+                logger.warning(f"⚠️ Encoding {encoding} failed: {e}")
                 continue
+
+        if not content:
+            # Last resort: UTF-8 with error replacement
+            content = response.content.decode('utf-8', errors='replace')
+            logger.warning("⚠️ Using UTF-8 with error replacement")
         
         if not content:
             raise HTTPException(status_code=500, detail="Failed to decode XML content")
@@ -581,15 +601,35 @@ async def get_mariners_forecast_direct():
         
         logger.info(f"IMS response length: {len(response.content)} bytes")
         
-        # Try different encodings
+        # ✅ FIXED: Proper Hebrew encoding detection
         content = None
-        for encoding in ['iso-8859-1', 'utf-8', 'windows-1255']:
+        encodings_to_try = [
+            'windows-1255',  # Hebrew Windows (try FIRST)
+            'iso-8859-8',    # Hebrew ISO
+            'utf-8',         # UTF-8
+            'cp1255'         # Hebrew code page
+        ]
+
+        for encoding in encodings_to_try:
             try:
                 content = response.content.decode(encoding)
-                logger.info(f"Successfully decoded with {encoding}")
-                break
-            except UnicodeDecodeError:
+                logger.info(f"✅ Successfully decoded with {encoding}")
+                # Verify Hebrew characters are not mojibake
+                test_text = content[:500]
+                if 'ã' not in test_text and 'é' not in test_text:  # Common mojibake indicators
+                    logger.info(f"✅ Encoding {encoding} verified - no mojibake detected")
+                    break
+                else:
+                    logger.warning(f"⚠️ Encoding {encoding} produced mojibake, trying next...")
+                    content = None
+            except (UnicodeDecodeError, AttributeError) as e:
+                logger.warning(f"⚠️ Encoding {encoding} failed: {e}")
                 continue
+
+        if not content:
+            # Last resort: UTF-8 with error replacement
+            content = response.content.decode('utf-8', errors='replace')
+            logger.warning("⚠️ Using UTF-8 with error replacement")
         
         if not content:
             raise HTTPException(status_code=500, detail="Failed to decode XML content")
