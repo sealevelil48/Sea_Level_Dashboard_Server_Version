@@ -122,7 +122,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
               <Card.Body>
                 {location.forecasts.map((forecast, idx) => (
                   <div key={idx} className={`forecast-period ${idx > 0 ? 'mt-3 pt-3 border-top' : ''}`}>
-                    <div className="mb-2">
+                    <div className="mb-2 text-sm-start text-center">
                       <Badge bg="info" className="me-2">
                         {formatDateTime(forecast.from)} - {formatDateTime(forecast.to)}
                       </Badge>

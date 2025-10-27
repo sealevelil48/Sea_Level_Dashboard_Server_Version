@@ -3,25 +3,32 @@
   cursor: pointer;
   position: relative;
   transition: 300ms;
-  color: #212529;
+  color: white;
 }
 
 .custom-selected {
-  background-color: #fff;
-  padding: 8px 12px;
-  border-radius: 5px;
+  background-color: #1e3c72 !important;
+  border: 1px solid #2a4a8c !important;
+  color: white !important;
+  border-radius: 8px;
+  padding: 10px;
   position: relative;
   font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #ced4da;
+}
+
+.custom-selected:focus {
+  background-color: #2a4a8c !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
 }
 
 .custom-arrow {
   height: 16px;
   width: 16px;
-  fill: #6c757d;
+  fill: white;
   transition: 300ms;
   transform: rotate(0deg);
 }
@@ -33,39 +40,56 @@
 .custom-options {
   display: flex;
   flex-direction: column;
-  border-radius: 5px;
+  border-radius: 8px;
   padding: 5px;
-  background-color: #fff;
+  background-color: #1e3c72;
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
   z-index: 1000;
-  border: 1px solid #ced4da;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #2a4a8c;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   max-height: 200px;
   overflow-y: auto;
 }
 
 .custom-option {
-  border-radius: 3px;
+  border-radius: 6px;
   padding: 8px 12px;
   transition: 300ms;
-  background-color: #fff;
+  background-color: #1e3c72;
   font-size: 14px;
-  color: #212529;
+  color: white;
   cursor: pointer;
 }
 
 .custom-option:hover {
-  background-color: #f8f9fa;
+  background-color: #2a4a8c;
 }
 
 .custom-option.selected {
-  background-color: #0d6efd;
+  background-color: #3b82f6;
   color: white;
 }
 
 .custom-option.selected:hover {
-  background-color: #0b5ed7;
+  background-color: #2563eb;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .custom-selected {
+    padding: 8px;
+    font-size: 14px;
+  }
+  
+  .custom-option {
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+  
+  .custom-options {
+    max-height: 300px;
+  }
 }

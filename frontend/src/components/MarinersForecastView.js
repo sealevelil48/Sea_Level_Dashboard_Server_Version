@@ -143,8 +143,12 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
   }
 
   const TableView = () => (
-    <div style={{ overflowX: 'auto' }}>
-      <Table striped bordered hover variant="dark" size="sm">
+    <div style={{ 
+      overflowX: 'auto',
+      WebkitOverflowScrolling: 'touch',
+      maxWidth: '100%'
+    }}>
+      <Table striped bordered hover variant="dark" size="sm" style={{ minWidth: '800px' }}>
         <thead>
           <tr>
             <th>Location</th>
