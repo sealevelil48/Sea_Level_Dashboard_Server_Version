@@ -48,6 +48,11 @@ stream_handler.setFormatter(logging.Formatter(log_format))
 stream_handler.setLevel(logging.INFO)
 stream_handler.stream.reconfigure(encoding='utf-8')
 
+# Suppress asyncio warnings on Windows
+logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+logging.getLogger('asyncio.proactor_events').setLevel(logging.CRITICAL)
+logging.getLogger('asyncio.windows_events').setLevel(logging.CRITICAL)
+
 logging.basicConfig(
     level=logging.INFO,
     format=log_format,
@@ -829,7 +834,11 @@ if __name__ == "__main__":
     print("Press Ctrl+C to stop the server")
     print("=" * 60 + "\n")
     
-    # Run server
+    # Run server with Windows-specific fixes
+    import asyncio
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    
     uvicorn.run(
         app,
         host=host,
@@ -840,5 +849,9 @@ if __name__ == "__main__":
         # Only use reload in development
         reload=(env == "development"),
         # Workers for production (Windows supports only 1 worker with reload=False)
-        workers=1
+        workers=1,
+        # Windows-specific fixes for WinError 64
+        loop="asyncio",
+        ws_ping_interval=None,
+        ws_ping_timeout=None
     )
