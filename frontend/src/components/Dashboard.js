@@ -1221,6 +1221,13 @@ function Dashboard() {
 
           {/* Content Column */}
           <Col xs={12} lg={9} xl={10}>
+            {/* IMS Warnings Card - Above stats on desktop, below filters on mobile */}
+            <Row className="mb-3">
+              <Col xs={12}>
+                <WarningsCard apiBaseUrl={API_BASE_URL} />
+              </Col>
+            </Row>
+
             {/* Stats Cards - Responsive Grid */}
             <Row className="mb-3">
               <Col 
@@ -1274,15 +1281,6 @@ function Dashboard() {
                   value={stats.anomalies} 
                   isMobile={isMobile}
                 />
-              </Col>
-              <Col 
-                xs={12}
-                sm={12}
-                md={12}
-                lg={4}
-                className="mb-2"
-              >
-                <WarningsCard apiBaseUrl={API_BASE_URL} />
               </Col>
             </Row>
 
