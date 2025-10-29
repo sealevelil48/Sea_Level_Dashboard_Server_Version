@@ -56,7 +56,7 @@ const Disclaimer = () => {
             <ul>
               <li><strong>Sea Level Measurements:</strong> Proprietary sensor network deployed across coastal monitoring stations</li>
               <li><strong>Wave Forecast Data:</strong> Israel Meteorological Service (IMS) - Used under applicable terms</li>
-              <li><strong>Mapping Services:</strong> GovMap API and OpenStreetMap contributors</li>
+              <li><strong>Mapping Services:</strong> GovMap API, OpenStreetMap contributors, and Leaflet.js – used under the BSD 2-Clause License</li>
               <li><strong>Predictive Models:</strong> Internal algorithms (ARIMA, Kalman Filter, Ensemble methods)</li>
             </ul>
             <p style={{ marginTop: '15px', fontSize: '0.95rem', color: '#718096' }}>We acknowledge and respect the intellectual property rights of all third-party data providers. The use of third-party data is subject to their respective terms and conditions.</p>

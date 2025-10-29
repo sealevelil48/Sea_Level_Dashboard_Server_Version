@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { parseWindInfo, parseWaveHeight } from '../utils/imsCodeTranslations';
 
 // Fix for default markers in React
 delete L.Icon.Default.prototype._getIconUrl;
@@ -161,12 +162,15 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
                 const marker = L.marker(coords).addTo(mapInstanceRef.current);
                 
                 const currentForecast = seaOfGalilee.forecasts[0];
+                const waveHeight = currentForecast?.elements?.wave_height ? parseWaveHeight(currentForecast.elements.wave_height) : 'N/A';
+                const windInfo = currentForecast?.elements?.wind ? parseWindInfo(currentForecast.elements.wind) : 'N/A';
+                
                 const popupContent = `
                   <div style="font-family: Arial, sans-serif; min-width: 200px;">
                     <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${seaOfGalilee.name_eng}</h4>
-                    <p><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</p>
+                    <p><strong>Wave Height:</strong> ${waveHeight}</p>
                     <p><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
-                    <p><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</p>
+                    <p><strong>Wind:</strong> ${windInfo}</p>
                     <p><strong>Forecast Period:</strong><br/>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</p>
                     <p style="font-size: 11px; color: #888;">
                       <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
@@ -214,12 +218,15 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
       const marker = L.marker(coords).addTo(mapInstanceRef.current);
       
       const currentForecast = seaOfGalilee.forecasts[0];
+      const waveHeight = currentForecast?.elements?.wave_height ? parseWaveHeight(currentForecast.elements.wave_height) : 'N/A';
+      const windInfo = currentForecast?.elements?.wind ? parseWindInfo(currentForecast.elements.wind) : 'N/A';
+      
       const popupContent = `
         <div style="font-family: Arial, sans-serif; min-width: 200px;">
           <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${seaOfGalilee.name_eng}</h4>
-          <p><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</p>
+          <p><strong>Wave Height:</strong> ${waveHeight}</p>
           <p><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
-          <p><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</p>
+          <p><strong>Wind:</strong> ${windInfo}</p>
           <p><strong>Forecast Period:</strong><br/>${currentForecast?.period?.start || 'N/A'} - ${currentForecast?.period?.end || 'N/A'}</p>
           <p style="font-size: 11px; color: #888;">
             <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
@@ -288,12 +295,15 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
       // Add forecast data after sea level if available for combined stations
       if (forecastLocation && stationToForecastMapping[station]) {
         const currentForecast = forecastLocation.forecasts[0];
+        const waveHeight = currentForecast?.elements?.wave_height ? parseWaveHeight(currentForecast.elements.wave_height) : 'N/A';
+        const windInfo = currentForecast?.elements?.wind ? parseWindInfo(currentForecast.elements.wind) : 'N/A';
+        
         popupContent += `
             <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
             <h4 style="margin: 0 0 10px 0; color: #ff8c00;">${forecastLocation.name_eng}</h4>
-            <p><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</p>
+            <p><strong>Wave Height:</strong> ${waveHeight}</p>
             <p><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
-            <p><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</p>
+            <p><strong>Wind:</strong> ${windInfo}</p>
             <p><strong>Forecast Period:</strong><br/>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</p>
             <p style="font-size: 11px; color: #888;">
               <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
@@ -324,23 +334,7 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
         
         let popupContent = '<div style="font-family: Arial, sans-serif; min-width: 200px;">';
         
-        // Add forecast data first if available for combined stations
-        if (forecastLocation && stationToForecastMapping[station]) {
-          const currentForecast = forecastLocation.forecasts[0];
-          popupContent += `
-              <h4 style="margin: 0 0 10px 0; color: #ff8c00;">${forecastLocation.name_eng}</h4>
-              <p><strong>Wave Height:</strong> ${currentForecast?.elements?.wave_height || 'N/A'}</p>
-              <p><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
-              <p><strong>Wind:</strong> ${currentForecast?.elements?.wind || 'N/A'}</p>
-              <p><strong>Forecast Period:</strong><br/>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</p>
-              <p style="font-size: 11px; color: #888;">
-                <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
-              </p>
-              <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
-          `;
-        }
-        
-        // Add sea level data
+        // Add sea level data first
         if (latestData) {
           popupContent += `
               <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
@@ -355,6 +349,25 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
           popupContent += `
               <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${station}</h4>
               <p>Loading sea level data...</p>
+          `;
+        }
+        
+        // Add forecast data after sea level if available for combined stations
+        if (forecastLocation && stationToForecastMapping[station]) {
+          const currentForecast = forecastLocation.forecasts[0];
+          const waveHeight = currentForecast?.elements?.wave_height ? parseWaveHeight(currentForecast.elements.wave_height) : 'N/A';
+          const windInfo = currentForecast?.elements?.wind ? parseWindInfo(currentForecast.elements.wind) : 'N/A';
+          
+          popupContent += `
+              <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+              <h4 style="margin: 0 0 10px 0; color: #ff8c00;">${forecastLocation.name_eng}</h4>
+              <p><strong>Wave Height:</strong> ${waveHeight}</p>
+              <p><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
+              <p><strong>Wind:</strong> ${windInfo}</p>
+              <p><strong>Forecast Period:</strong><br/>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</p>
+              <p style="font-size: 11px; color: #888;">
+                <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
+              </p>
           `;
         }
         

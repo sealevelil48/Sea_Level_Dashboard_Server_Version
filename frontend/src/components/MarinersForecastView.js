@@ -1,52 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Button, Spinner, Tabs, Tab, Table } from 'react-bootstrap';
-
-// Translation functions
-const translateWind = (windStr) => {
-  if (!windStr) return windStr;
-  const parts = windStr.split('/');
-  if (parts.length !== 2) return windStr;
-  const directions = {
-    '045': 'NE', '135': 'SE', '225': 'SW', '315': 'NW', 
-    '180': 'S', '000': 'N', '090': 'E', '270': 'W'
-  };
-  const dirPart = parts[0].trim();
-  let dirText = dirPart;
-  if (dirPart.includes('-')) {
-    const [start, end] = dirPart.split('-');
-    dirText = `${directions[start] || start}-${directions[end] || end}`;
-  } else {
-    dirText = directions[dirPart] || dirPart;
-  }
-  return `${dirText} (${parts[1].trim()} km/h)`;
-};
-
-const translateWeatherCode = (code) => {
-  const codes = {
-    '1220': 'Partly Cloudy', 
-    '1250': 'Mostly Cloudy', 
-    '1000': 'Clear', 
-    '4001': 'Rain', 
-    '8000': 'Thunderstorm'
-  };
-  return codes[code] || code;
-};
-
-const translateSeaStatus = (seaStr) => {
-  if (!seaStr) return seaStr;
-  const parts = seaStr.split(' / ');
-  if (parts.length !== 2) return seaStr;
-  const code = parts[0].trim();
-  const height = parts[1].trim();
-  const seaCodes = {
-    '10': 'Calm', '20': 'Smooth', '30': 'Slight', 
-    '40': 'Light', '50': 'Slight', '60': 'Moderate', 
-    '70': 'Rough', '80': 'Very Rough', '90': 'High', 
-    '95': 'Very High'
-  };
-  const description = seaCodes[code] || code;
-  return `${description} (${height} cm)`;
-};
+import { 
+  parseWindInfo, 
+  translateWeatherCode, 
+  parseWaveHeight, 
+  formatPressure, 
+  formatVisibility,
+  parseSwellInfo 
+} from '../utils/imsCodeTranslations';
 
 const MarinersForecastView = ({ apiBaseUrl }) => {
   const [forecastData, setForecastData] = useState(null);
@@ -116,15 +77,18 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
           `${location.name_eng} (${location.name_heb})`,
           formatDateTime(forecast.from),
           formatDateTime(forecast.to),
-          forecast.elements['Pressure'] || 'N/A',
+          forecast.elements['Pressure'] ? 
+            formatPressure(forecast.elements['Pressure']) : 'N/A',
           forecast.elements['Sea status and waves height'] ? 
-            translateSeaStatus(forecast.elements['Sea status and waves height']) : 'N/A',
+            parseWaveHeight(forecast.elements['Sea status and waves height']) : 'N/A',
           forecast.elements['Wind direction and speed'] ? 
-            translateWind(forecast.elements['Wind direction and speed']) : 'N/A',
-          forecast.elements['Visibility'] || 'N/A',
+            parseWindInfo(forecast.elements['Wind direction and speed']) : 'N/A',
+          forecast.elements['Visibility'] ? 
+            formatVisibility(forecast.elements['Visibility']) : 'N/A',
           forecast.elements['Weather code'] ? 
             translateWeatherCode(forecast.elements['Weather code']) : 'N/A',
-          forecast.elements['Swell'] || 'N/A'
+          forecast.elements['Swell'] ? 
+            parseSwellInfo(forecast.elements['Swell']) : 'N/A'
         ]);
       });
     });
@@ -227,10 +191,10 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
                   <tr>
                     <th style={{ minWidth: '150px' }}>📍 Location</th>
                     <th style={{ minWidth: '160px' }}>⏰ Period</th>
-                    <th style={{ minWidth: '100px' }}>🌡️ Pressure</th>
+                    <th style={{ minWidth: '100px' }}>🌡️ Pressure (hPa)</th>
                     <th style={{ minWidth: '180px' }}>🌊 Sea Status</th>
                     <th style={{ minWidth: '150px' }}>💨 Wind</th>
-                    <th style={{ minWidth: '100px' }}>👁️ Visibility</th>
+                    <th style={{ minWidth: '100px' }}>👁️ Visibility (nm)</th>
                     <th style={{ minWidth: '130px' }}>☁️ Weather</th>
                     <th style={{ minWidth: '100px' }}>🌀 Swell</th>
                   </tr>
@@ -253,27 +217,42 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
                             {formatDateTime(forecast.to)}
                           </small>
                         </td>
-                        <td>{forecast.elements['Pressure'] || 'N/A'}</td>
+                        <td>
+                          {forecast.elements['Pressure'] ? 
+                            formatPressure(forecast.elements['Pressure']) : 
+                            'N/A'
+                          }
+                        </td>
                         <td>
                           {forecast.elements['Sea status and waves height'] ? 
-                            translateSeaStatus(forecast.elements['Sea status and waves height']) : 
+                            parseWaveHeight(forecast.elements['Sea status and waves height']) : 
                             'N/A'
                           }
                         </td>
                         <td>
                           {forecast.elements['Wind direction and speed'] ? 
-                            translateWind(forecast.elements['Wind direction and speed']) : 
+                            parseWindInfo(forecast.elements['Wind direction and speed']) : 
                             'N/A'
                           }
                         </td>
-                        <td>{forecast.elements['Visibility'] || 'N/A'}</td>
+                        <td>
+                          {forecast.elements['Visibility'] ? 
+                            formatVisibility(forecast.elements['Visibility']) : 
+                            'N/A'
+                          }
+                        </td>
                         <td>
                           {forecast.elements['Weather code'] ? 
                             translateWeatherCode(forecast.elements['Weather code']) : 
                             'N/A'
                           }
                         </td>
-                        <td>{forecast.elements['Swell'] || 'N/A'}</td>
+                        <td>
+                          {forecast.elements['Swell'] ? 
+                            parseSwellInfo(forecast.elements['Swell']) : 
+                            'N/A'
+                          }
+                        </td>
                       </tr>
                     ))
                   )}

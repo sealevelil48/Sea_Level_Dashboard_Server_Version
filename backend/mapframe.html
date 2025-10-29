@@ -44,6 +44,20 @@
             color: #d00;
             text-align: center;
         }
+        
+        /* Mobile portrait popup positioning */
+        @media screen and (max-width: 768px) and (orientation: portrait) {
+            .govmap-bubble {
+                position: fixed !important;
+                right: 10px !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+                left: auto !important;
+                bottom: auto !important;
+                max-width: 280px !important;
+                z-index: 9999 !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -273,7 +287,7 @@
                         data: {
                             tooltips: tooltips,
                             bubbleHTML: `
-                                <div style="font-family: Arial, sans-serif; padding: 15px; min-width: 250px; direction: ltr; text-align: left;">
+                                <div class="govmap-bubble" style="font-family: Arial, sans-serif; padding: 15px; min-width: 250px; direction: ltr; text-align: left;">
                                     <h4 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; direction: ltr; text-align: left;">{0}</h4>
                                     <div style="margin: 8px 0; direction: ltr; text-align: left;">{1}</div>
                                     <div style="margin: 8px 0; direction: ltr; text-align: left;">{2}</div>
@@ -283,6 +297,25 @@
                             bubbleHTMLParameters: bubbleHTMLParameters
                         }
                     });
+                    
+                    // Apply mobile positioning after popup creation
+                    setTimeout(() => {
+                        if (window.innerWidth <= 768 && window.innerHeight > window.innerWidth) {
+                            const bubbles = document.querySelectorAll('.govmap-bubble');
+                            bubbles.forEach(bubble => {
+                                const parent = bubble.parentElement;
+                                if (parent) {
+                                    parent.style.position = 'fixed';
+                                    parent.style.right = '10px';
+                                    parent.style.top = '50%';
+                                    parent.style.transform = 'translateY(-50%)';
+                                    parent.style.left = 'auto';
+                                    parent.style.bottom = 'auto';
+                                    parent.style.zIndex = '9999';
+                                }
+                            });
+                        }
+                    }, 100);
                 };
                 
                 const fetchAndDisplayStations = (endDate) => {
