@@ -27,7 +27,7 @@ export const weatherCodes = {
   1580: "Extremely hot",
   1590: "Extremely cold",
   
-  // World Weather Codes
+  // Global Weather Codes
   1030: "Hail",
   1040: "Blowing Snow, Blizzard, Snowdrift, Snowstorm",
   1050: "Snow Showers, Flurries",
@@ -80,15 +80,15 @@ export const seaStateCodes = {
 };
 
 export const windDirections = {
-  "000": "N",
-  "045": "NE",
-  "090": "E", 
-  "135": "SE",
-  "180": "S",
-  "225": "SW",
-  "270": "W",
-  "315": "NW",
-  "360": "N"
+  "000": "Northerly",
+  "045": "North Easterly",
+  "090": "Easterly", 
+  "135": "South Easterly",
+  "180": "Southerly",
+  "225": "South Westerly",
+  "270": "Westerly",
+  "315": "North Westerly",
+  "360": "Northerly"
 };
 
 // Helper functions to translate codes
@@ -173,4 +173,45 @@ export const getWindRiskColor = (windString) => {
   if (maxSpeed >= 25) return 'warning';    // Significant Risk - orange
   if (maxSpeed >= 15) return 'warning';    // Risk - yellow  
   return 'secondary';                      // No significant weather - grey
+};
+
+// Add pressure unit (hPa)
+export const formatPressure = (pressure) => {
+  if (!pressure) return pressure;
+  return `${pressure} hPa`;
+};
+
+// Add visibility unit (nm - nautical miles)
+export const formatVisibility = (visibility) => {
+  if (!visibility) return visibility;
+  return `${visibility} nm`;
+};
+
+// Parse swell format - can contain wind direction codes or sea state codes
+export const parseSwellInfo = (swellString) => {
+  if (!swellString || typeof swellString !== 'string') return swellString;
+  
+  const parts = swellString.split(' / ');
+  if (parts.length !== 2) {
+    // Single code - check if it's a wind direction or sea state code
+    const code = swellString.trim();
+    const windDir = translateWindDirection(code.padStart(3, '0'));
+    if (windDir !== code) {
+      return windDir; // It's a wind direction code
+    }
+    return translateSeaStateCode(code); // Try as sea state code
+  }
+  
+  const [code, actualHeight] = parts;
+  const codeStr = code.trim();
+  
+  // Check if first part is wind direction code
+  const windDir = translateWindDirection(codeStr.padStart(3, '0'));
+  if (windDir !== codeStr) {
+    return `${windDir} (${actualHeight.trim()} cm)`;
+  }
+  
+  // Otherwise treat as sea state code
+  const translatedCode = translateSeaStateCode(codeStr);
+  return `${translatedCode} (${actualHeight.trim()} cm)`;
 };
