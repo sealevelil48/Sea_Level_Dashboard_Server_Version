@@ -27,7 +27,7 @@ function Dashboard() {
   
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTab, setActiveTab] = useState('graph');
-  const [mapTab, setMapTab] = useState('osm');
+  const [mapTab, setMapTab] = useState('govmap');
   const [tableTab, setTableTab] = useState('historical');
   const [forecastData, setForecastData] = useState(null);
   const [stations, setStations] = useState([]);
@@ -952,8 +952,8 @@ function Dashboard() {
     }, 300);
   }, []);
 
-  // Map component
-  const MapView = useCallback(() => {
+  // Map component with proper conditional rendering
+  const renderMapContent = useCallback(() => {
     if (mapTab === 'govmap') {
       return (
         <div style={{ width: '100%', height: 'clamp(300px, 50vh, 500px)', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
@@ -968,17 +968,20 @@ function Dashboard() {
           />
         </div>
       );
-    } else {
+    } else if (mapTab === 'osm') {
       return (
-        <OSMMap 
-          key="osm-map"
-          stations={stations.filter(s => s !== 'All Stations')}
-          currentStation={selectedStations[0]}
-          mapData={graphData}
-          forecastData={forecastData}
-        />
+        <Suspense fallback={<div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner animation="border" /></div>}>
+          <OSMMap 
+            key={`osm-map-${selectedStations.join('-')}`}
+            stations={stations.filter(s => s !== 'All Stations')}
+            currentStation={selectedStations[0]}
+            mapData={graphData}
+            forecastData={forecastData}
+          />
+        </Suspense>
       );
     }
+    return null;
   }, [mapTab, stations, selectedStations, graphData, filters.endDate, forecastData]);
 
   return (
@@ -1613,13 +1616,11 @@ function Dashboard() {
                   
                   <Tab eventKey="map" title="Map View">
                     <Tabs activeKey={mapTab} onSelect={setMapTab} className="mb-2">
-                      <Tab eventKey="osm" title="Leaflet">
-                        <Suspense fallback={<Spinner animation="border" />}>
-                          <MapView />
-                        </Suspense>
-                      </Tab>
                       <Tab eventKey="govmap" title="GovMap">
-                        <MapView />
+                        {renderMapContent()}
+                      </Tab>
+                      <Tab eventKey="osm" title="Leaflet">
+                        {renderMapContent()}
                       </Tab>
                     </Tabs>
                   </Tab>
