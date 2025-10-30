@@ -45,17 +45,51 @@
             text-align: center;
         }
         
-        /* Mobile portrait popup positioning */
+        /* CRITICAL: Mobile PORTRAIT ONLY positioning - Fixed to prevent landscape regression */
         @media screen and (max-width: 768px) and (orientation: portrait) {
-            .govmap-bubble {
+            /* Target all possible popup elements - but ONLY in portrait */
+            .govmap-bubble,
+            div[style*="position: absolute"],
+            div[style*="position: fixed"],
+            div[class*="bubble"],
+            div[class*="popup"],
+            div[class*="tooltip"] {
                 position: fixed !important;
-                right: 10px !important;
+                right: 5px !important;
                 top: 50% !important;
                 transform: translateY(-50%) !important;
                 left: auto !important;
                 bottom: auto !important;
-                max-width: 280px !important;
-                z-index: 9999 !important;
+                max-width: 250px !important;
+                max-height: 80vh !important; /* Prevent overflow */
+                z-index: 99999 !important;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+                border-radius: 8px !important;
+                overflow-y: auto !important; /* Allow scrolling if content too long */
+            }
+            
+            /* Override any GovMap specific positioning - PORTRAIT ONLY */
+            #map div[style*="position"] {
+                position: fixed !important;
+                right: 5px !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+                left: auto !important;
+                bottom: auto !important;
+                z-index: 99999 !important;
+            }
+        }
+        
+        /* LANDSCAPE MODE - Reset to default behavior */
+        @media screen and (max-width: 992px) and (orientation: landscape) {
+            /* Allow GovMap default positioning in landscape */
+            .govmap-bubble,
+            div[class*="bubble"],
+            div[class*="popup"] {
+                position: absolute !important;
+                max-width: 300px !important;
+                max-height: 60vh !important;
+                /* Let GovMap handle positioning naturally */
             }
         }
     </style>
@@ -83,6 +117,16 @@
             document.getElementById('loading').style.display = 'none';
             document.getElementById('error').style.display = 'none';
             document.getElementById('map').style.display = 'block';
+        }
+        
+        // CRITICAL: Helper function to detect TRUE portrait orientation
+        function isMobilePortrait() {
+            return window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+        }
+        
+        // CRITICAL: Helper function to detect landscape orientation
+        function isMobileLandscape() {
+            return window.innerWidth <= 992 && window.innerWidth >= window.innerHeight;
         }
         
         // IMS Code Translation Functions
@@ -238,16 +282,16 @@
                             bubbleHTMLParameters.push([
                                 station.Station,
                                 `<strong>Sea Level:</strong> ${station.latest_value} m`,
-                                `<strong>Temperature:</strong> ${station.temperature || 'N/A'}°C<div style="margin-top: 5px;"><strong>Last Update:</strong> ${station.last_update}</div><div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_parent" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`,
-                                forecastHTML
+                                `<strong>Temperature:</strong> ${station.temperature || 'N/A'}°C`,
+                                `<strong>Last Update:</strong> ${station.last_update}<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_parent" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>${forecastHTML}`
                             ]);
                         } else {
                             tooltips.push(`${station.Station} - ${station.latest_value}m`);
                             bubbleHTMLParameters.push([
                                 station.Station,
                                 `<strong>Sea Level:</strong> ${station.latest_value} m`,
-                                `<strong>Temperature:</strong> ${station.temperature || 'N/A'}°C<div style="margin-top: 5px;"><strong>Last Update:</strong> ${station.last_update}</div><div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_parent" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`,
-                                '' // Empty string for stations without forecast
+                                `<strong>Temperature:</strong> ${station.temperature || 'N/A'}°C`,
+                                `<strong>Last Update:</strong> ${station.last_update}<div style="font-size: 11px; color: #888; margin-top: 10px;"><a href="https://www.gov.il/he/departments/survey_of_israel/govil-landing-page" target="_parent" style="color: #666; text-decoration: none;">© 2025 Survey of Israel. All rights reserved.</a></div>`
                             ]);
                         }
                     });
@@ -291,30 +335,168 @@
                                     <h4 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; direction: ltr; text-align: left;">{0}</h4>
                                     <div style="margin: 8px 0; direction: ltr; text-align: left;">{1}</div>
                                     <div style="margin: 8px 0; direction: ltr; text-align: left;">{2}</div>
-                                    {3}
+                                    <div style="margin: 8px 0; direction: ltr; text-align: left;">{3}</div>
                                 </div>
                             `,
                             bubbleHTMLParameters: bubbleHTMLParameters
                         }
                     });
                     
-                    // Apply mobile positioning after popup creation
+                    // CRITICAL FIX: Apply mobile positioning ONLY in portrait orientation
                     setTimeout(() => {
-                        if (window.innerWidth <= 768 && window.innerHeight > window.innerWidth) {
-                            const bubbles = document.querySelectorAll('.govmap-bubble');
-                            bubbles.forEach(bubble => {
-                                const parent = bubble.parentElement;
-                                if (parent) {
-                                    parent.style.position = 'fixed';
-                                    parent.style.right = '10px';
-                                    parent.style.top = '50%';
-                                    parent.style.transform = 'translateY(-50%)';
-                                    parent.style.left = 'auto';
-                                    parent.style.bottom = 'auto';
-                                    parent.style.zIndex = '9999';
+                        // PORTRAIT MODE ONLY
+                        if (isMobilePortrait()) {
+                            const forcePortraitPosition = (element) => {
+                                if (!element) return;
+                                element.style.setProperty('position', 'fixed', 'important');
+                                element.style.setProperty('right', '5px', 'important');
+                                element.style.setProperty('top', '50%', 'important');
+                                element.style.setProperty('transform', 'translateY(-50%)', 'important');
+                                element.style.setProperty('left', 'auto', 'important');
+                                element.style.setProperty('bottom', 'auto', 'important');
+                                element.style.setProperty('width', 'auto', 'important');
+                                element.style.setProperty('max-width', '250px', 'important');
+                                element.style.setProperty('max-height', '80vh', 'important');
+                                element.style.setProperty('z-index', '99999', 'important');
+                                element.style.setProperty('box-shadow', '0 4px 12px rgba(0,0,0,0.3)', 'important');
+                                element.style.setProperty('border-radius', '8px', 'important');
+                                element.style.setProperty('overflow-y', 'auto', 'important');
+                            };
+                            
+                            const applyPortraitPositioning = () => {
+                                // Double-check we're still in portrait before applying
+                                if (!isMobilePortrait()) {
+                                    console.log('Orientation changed, skipping portrait positioning');
+                                    return;
+                                }
+                                
+                                // Target all possible popup selectors
+                                const selectors = [
+                                    '.govmap-bubble',
+                                    'div[style*="position: absolute"]',
+                                    'div[style*="position: fixed"]',
+                                    'div[class*="bubble"]',
+                                    'div[class*="popup"]',
+                                    'div[class*="tooltip"]',
+                                    '#map > div > div',
+                                    '#map div[style]'
+                                ];
+                                
+                                selectors.forEach(selector => {
+                                    const elements = document.querySelectorAll(selector);
+                                    elements.forEach(element => {
+                                        // Check if element contains popup-like content
+                                        if (element.innerHTML && (
+                                            element.innerHTML.includes('Sea Level') || 
+                                            element.innerHTML.includes('Wave Height') || 
+                                            element.innerHTML.includes('Temperature')
+                                        )) {
+                                            forcePortraitPosition(element);
+                                            
+                                            // Also position parent containers (up to 3 levels)
+                                            let parent = element.parentElement;
+                                            let depth = 0;
+                                            while (parent && parent !== document.body && depth < 3) {
+                                                if (parent.style.position) {
+                                                    forcePortraitPosition(parent);
+                                                }
+                                                parent = parent.parentElement;
+                                                depth++;
+                                            }
+                                        }
+                                    });
+                                });
+                            };
+                            
+                            // Apply immediately
+                            applyPortraitPositioning();
+                            
+                            // Re-apply on any DOM changes (but check orientation first)
+                            const observer = new MutationObserver(() => {
+                                if (isMobilePortrait()) {
+                                    setTimeout(applyPortraitPositioning, 50);
+                                }
+                            });
+                            observer.observe(document.body, { 
+                                childList: true, 
+                                subtree: true, 
+                                attributes: true, 
+                                attributeFilter: ['style', 'class'] 
+                            });
+                            
+                            // Also apply on click events (when popups are opened)
+                            document.addEventListener('click', () => {
+                                if (isMobilePortrait()) {
+                                    setTimeout(applyPortraitPositioning, 100);
                                 }
                             });
                         }
+                        
+                        // LANDSCAPE MODE - Remove forced positioning
+                        if (isMobileLandscape()) {
+                            const resetLandscapePosition = () => {
+                                const selectors = [
+                                    '.govmap-bubble',
+                                    'div[class*="bubble"]',
+                                    'div[class*="popup"]'
+                                ];
+                                
+                                selectors.forEach(selector => {
+                                    const elements = document.querySelectorAll(selector);
+                                    elements.forEach(element => {
+                                        // Reset to GovMap's default positioning
+                                        element.style.removeProperty('position');
+                                        element.style.removeProperty('right');
+                                        element.style.removeProperty('top');
+                                        element.style.removeProperty('transform');
+                                        element.style.removeProperty('left');
+                                        element.style.removeProperty('bottom');
+                                        element.style.removeProperty('width');
+                                        
+                                        // Set reasonable landscape constraints
+                                        element.style.setProperty('max-width', '300px', 'important');
+                                        element.style.setProperty('max-height', '60vh', 'important');
+                                    });
+                                });
+                            };
+                            
+                            resetLandscapePosition();
+                        }
+                        
+                        // CRITICAL: Listen for orientation changes
+                        window.addEventListener('orientationchange', () => {
+                            setTimeout(() => {
+                                // Re-evaluate and apply appropriate positioning
+                                if (isMobilePortrait()) {
+                                    console.log('Switched to portrait');
+                                    // Trigger portrait positioning
+                                    const event = new Event('click');
+                                    document.dispatchEvent(event);
+                                } else if (isMobileLandscape()) {
+                                    console.log('Switched to landscape - resetting position');
+                                    // Reset any forced positioning
+                                    const bubbles = document.querySelectorAll('.govmap-bubble, div[class*="bubble"], div[class*="popup"]');
+                                    bubbles.forEach(bubble => {
+                                        bubble.style.removeProperty('position');
+                                        bubble.style.removeProperty('right');
+                                        bubble.style.removeProperty('top');
+                                        bubble.style.removeProperty('transform');
+                                        bubble.style.setProperty('max-width', '300px', 'important');
+                                        bubble.style.setProperty('max-height', '60vh', 'important');
+                                    });
+                                }
+                            }, 300); // Delay to ensure orientation change is complete
+                        });
+                        
+                        // Also listen for resize events (for browsers that don't fire orientationchange)
+                        let resizeTimer;
+                        window.addEventListener('resize', () => {
+                            clearTimeout(resizeTimer);
+                            resizeTimer = setTimeout(() => {
+                                const event = new Event('orientationchange');
+                                window.dispatchEvent(event);
+                            }, 250);
+                        });
                     }, 100);
                 };
                 

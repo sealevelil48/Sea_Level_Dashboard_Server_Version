@@ -46,6 +46,9 @@ function Dashboard() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [filtersOpen, setFiltersOpen] = useState(window.innerWidth > 768);
   const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
+  const [isTableFullscreen, setIsTableFullscreen] = useState(false);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+  const [isMarinersFullscreen, setIsMarinersFullscreen] = useState(false);
   
   useEffect(() => {
     const handleResize = () => {
@@ -940,7 +943,7 @@ function Dashboard() {
     XLSX.writeFile(workbook, `sea_level_data_${selectedStations.join('_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // Fullscreen toggle function
+  // Universal fullscreen toggle functions
   const toggleGraphFullscreen = useCallback(() => {
     setIsGraphFullscreen(prev => !prev);
     
@@ -952,11 +955,35 @@ function Dashboard() {
     }, 300);
   }, []);
 
-  // Map component with proper conditional rendering
+  const toggleTableFullscreen = useCallback(() => {
+    setIsTableFullscreen(prev => !prev);
+  }, []);
+
+  const toggleMapFullscreen = useCallback(() => {
+    setIsMapFullscreen(prev => !prev);
+    
+    // Trigger map resize after transition
+    setTimeout(() => {
+      // Trigger resize event for maps
+      window.dispatchEvent(new Event('resize'));
+    }, 300);
+  }, []);
+
+  const toggleMarinersFullscreen = useCallback(() => {
+    setIsMarinersFullscreen(prev => !prev);
+  }, []);
+
+  // Map component with proper conditional rendering and fullscreen support
   const renderMapContent = useCallback(() => {
     if (mapTab === 'govmap') {
       return (
-        <div style={{ width: '100%', height: 'clamp(300px, 50vh, 500px)', border: '1px solid #2a4a8c', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ 
+          width: '100%', 
+          height: '100%', 
+          border: '1px solid #2a4a8c', 
+          borderRadius: '8px', 
+          overflow: 'hidden' 
+        }}>
           <iframe
             key={`govmap-${filters.endDate.toISOString().split('T')[0]}`}
             src={`${API_BASE_URL}/mapframe?end_date=${filters.endDate.toISOString().split('T')[0]}`}
@@ -970,7 +997,7 @@ function Dashboard() {
       );
     } else if (mapTab === 'osm') {
       return (
-        <Suspense fallback={<div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner animation="border" /></div>}>
+        <Suspense fallback={<div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner animation="border" /></div>}>
           <OSMMap 
             key={`osm-map-${selectedStations.join('-')}`}
             stations={stations.filter(s => s !== 'All Stations')}
@@ -1419,13 +1446,26 @@ function Dashboard() {
                   </Tab>
                   
                   <Tab eventKey="table" title="Table View">
-                    <Tabs activeKey={tableTab} onSelect={setTableTab} className="mb-2">
-                      <Tab eventKey="historical" title="Historical">
-                        <div style={{ 
-                          overflowX: 'auto', 
-                          maxHeight: 'clamp(300px, 40vh, 400px)',
-                          WebkitOverflowScrolling: 'touch'
-                        }}>
+                    <div 
+                      style={{
+                        position: isTableFullscreen ? 'fixed' : 'relative',
+                        top: isTableFullscreen ? 0 : 'auto',
+                        left: isTableFullscreen ? 0 : 'auto',
+                        width: isTableFullscreen ? '100vw' : '100%',
+                        height: isTableFullscreen ? '100vh' : 'auto',
+                        zIndex: isTableFullscreen ? 1999 : 'auto',
+                        backgroundColor: isTableFullscreen ? '#0c1c35' : 'transparent',
+                        transition: 'all 0.3s ease',
+                        padding: isTableFullscreen ? '20px' : '0'
+                      }}
+                    >
+                      <Tabs activeKey={tableTab} onSelect={setTableTab} className="mb-2">
+                        <Tab eventKey="historical" title="Historical">
+                          <div style={{ 
+                            overflowX: 'auto', 
+                            maxHeight: isTableFullscreen ? 'calc(100vh - 120px)' : 'clamp(300px, 40vh, 400px)',
+                            WebkitOverflowScrolling: 'touch'
+                          }}>
                           {tableData.length > 0 ? (
                             <>
                               <table className="table table-dark table-striped table-sm">
@@ -1504,10 +1544,29 @@ function Dashboard() {
                           ) : (
                             <p className="text-center">No data to display</p>
                           )}
-                        </div>
-                      </Tab>
-                      <Tab eventKey="forecast" title="Forecast">
-                        <div style={{ overflowX: 'auto', maxHeight: 'clamp(300px, 40vh, 400px)' }}>
+                          </div>
+                          
+                          {/* Table Fullscreen Controls */}
+                          {!isTableFullscreen && isMobile && (
+                            <div className="mt-2 text-center">
+                              <Button 
+                                variant="outline-primary"
+                                size="sm"
+                                className="py-1"
+                                onClick={toggleTableFullscreen}
+                                style={{ fontSize: '0.75rem' }}
+                              >
+                                ⛶ Full Screen
+                              </Button>
+                            </div>
+                          )}
+                        </Tab>
+                        
+                        <Tab eventKey="forecast" title="Forecast">
+                          <div style={{ 
+                            overflowX: 'auto', 
+                            maxHeight: isTableFullscreen ? 'calc(100vh - 120px)' : 'clamp(300px, 40vh, 400px)'
+                          }}>
                           {(() => {
                             const predictionRows = [];
                             
@@ -1609,20 +1668,116 @@ function Dashboard() {
                             );
                           })()
                           }
+                          </div>
+                        </Tab>
+                      </Tabs>
+                      
+                      {/* Table Fullscreen Exit Button */}
+                      {isTableFullscreen && (
+                        <div style={{
+                          position: 'fixed',
+                          bottom: '20px',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: 2000
+                        }}>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            className="py-1"
+                            onClick={toggleTableFullscreen}
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            ✕ Exit Full Screen
+                          </Button>
                         </div>
-                      </Tab>
-                    </Tabs>
+                      )}
+                    </div>
                   </Tab>
                   
                   <Tab eventKey="map" title="Map View">
-                    <Tabs activeKey={mapTab} onSelect={setMapTab} className="mb-2">
-                      <Tab eventKey="govmap" title="GovMap">
-                        {renderMapContent()}
-                      </Tab>
-                      <Tab eventKey="osm" title="Leaflet">
-                        {renderMapContent()}
-                      </Tab>
-                    </Tabs>
+                    <div 
+                      style={{
+                        position: isMapFullscreen ? 'fixed' : 'relative',
+                        top: isMapFullscreen ? 0 : 'auto',
+                        left: isMapFullscreen ? 0 : 'auto',
+                        width: isMapFullscreen ? '100vw' : '100%',
+                        height: isMapFullscreen ? '100vh' : 'auto',
+                        zIndex: isMapFullscreen ? 1999 : 'auto',
+                        backgroundColor: isMapFullscreen ? '#0c1c35' : 'transparent',
+                        transition: 'all 0.3s ease',
+                        padding: isMapFullscreen ? '20px' : '0'
+                      }}
+                    >
+                      <Tabs activeKey={mapTab} onSelect={setMapTab} className="mb-2">
+                        <Tab eventKey="govmap" title="GovMap">
+                          <div style={{ 
+                            height: isMapFullscreen ? 'calc(100vh - 120px)' : 'clamp(300px, 50vh, 500px)'
+                          }}>
+                            {renderMapContent()}
+                          </div>
+                          
+                          {/* GovMap Fullscreen Controls */}
+                          {!isMapFullscreen && isMobile && (
+                            <div className="mt-2 text-center">
+                              <Button 
+                                variant="outline-primary"
+                                size="sm"
+                                className="py-1"
+                                onClick={toggleMapFullscreen}
+                                style={{ fontSize: '0.75rem' }}
+                              >
+                                ⛶ Full Screen
+                              </Button>
+                            </div>
+                          )}
+                        </Tab>
+                        
+                        <Tab eventKey="osm" title="Leaflet">
+                          <div style={{ 
+                            height: isMapFullscreen ? 'calc(100vh - 120px)' : 'clamp(300px, 50vh, 500px)'
+                          }}>
+                            {renderMapContent()}
+                          </div>
+                          
+                          {/* Leaflet Fullscreen Controls */}
+                          {!isMapFullscreen && isMobile && (
+                            <div className="mt-2 text-center">
+                              <Button 
+                                variant="outline-primary"
+                                size="sm"
+                                className="py-1"
+                                onClick={toggleMapFullscreen}
+                                style={{ fontSize: '0.75rem' }}
+                              >
+                                ⛶ Full Screen
+                              </Button>
+                            </div>
+                          )}
+                        </Tab>
+                      </Tabs>
+                      
+                      {/* Map Fullscreen Exit Button */}
+                      {isMapFullscreen && (
+                        <div style={{
+                          position: 'fixed',
+                          bottom: '20px',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: 2000
+                        }}>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            className="py-1"
+                            onClick={toggleMapFullscreen}
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            ✕ Exit Full Screen
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </Tab>
                   
                   <Tab eventKey="forecast" title="Waves Forecast">
@@ -1632,9 +1787,63 @@ function Dashboard() {
                   </Tab>
                   
                   <Tab eventKey="mariners" title="Mariners Forecast">
-                    <Suspense fallback={<Spinner animation="border" />}>
-                      <MarinersForecastView apiBaseUrl={API_BASE_URL} />
-                    </Suspense>
+                    <div 
+                      style={{
+                        position: isMarinersFullscreen ? 'fixed' : 'relative',
+                        top: isMarinersFullscreen ? 0 : 'auto',
+                        left: isMarinersFullscreen ? 0 : 'auto',
+                        width: isMarinersFullscreen ? '100vw' : '100%',
+                        height: isMarinersFullscreen ? '100vh' : 'auto',
+                        zIndex: isMarinersFullscreen ? 1999 : 'auto',
+                        backgroundColor: isMarinersFullscreen ? '#0c1c35' : 'transparent',
+                        transition: 'all 0.3s ease',
+                        padding: isMarinersFullscreen ? '20px' : '0',
+                        overflow: isMarinersFullscreen ? 'auto' : 'visible'
+                      }}
+                    >
+                      <Suspense fallback={<Spinner animation="border" />}>
+                        <MarinersForecastView 
+                          apiBaseUrl={API_BASE_URL} 
+                          isFullscreen={isMarinersFullscreen}
+                        />
+                      </Suspense>
+                      
+                      {/* Mariners Fullscreen Controls */}
+                      {!isMarinersFullscreen && isMobile && (
+                        <div className="mt-2 text-center">
+                          <Button 
+                            variant="outline-primary"
+                            size="sm"
+                            className="py-1"
+                            onClick={toggleMarinersFullscreen}
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            ⛶ Full Screen
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {/* Mariners Fullscreen Exit Button */}
+                      {isMarinersFullscreen && (
+                        <div style={{
+                          position: 'fixed',
+                          bottom: '20px',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: 2000
+                        }}>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            className="py-1"
+                            onClick={toggleMarinersFullscreen}
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            ✕ Exit Full Screen
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </Tab>
                 </Tabs>
               </Card.Body>
