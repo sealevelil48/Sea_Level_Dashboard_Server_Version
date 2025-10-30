@@ -15,12 +15,12 @@ class ApiError extends Error {
 class ApiService {
   constructor(baseURL = process.env.REACT_APP_API_URL || process.env.REACT_APP_BACKEND_URL || 'http://localhost:30886') {
     this.baseURL = baseURL;
-    this.timeout = 30000;
+    this.timeout = 60000; // Increased to 60 seconds
     this.activeRequests = new Map();
     this.cache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
-    this.retryAttempts = 3;
-    this.retryDelay = 1000;
+    this.retryAttempts = 2; // Reduced retries to avoid long delays
+    this.retryDelay = 2000; // Increased delay between retries
   }
 
   // Cache management
@@ -61,10 +61,10 @@ class ApiService {
       }
     }
     
-    // Cancel previous request if exists
-    if (this.activeRequests.has(requestId)) {
-      this.activeRequests.get(requestId).abort();
-    }
+    // Cancel previous request if exists (but allow multiple concurrent requests)
+    // if (this.activeRequests.has(requestId)) {
+    //   this.activeRequests.get(requestId).abort();
+    // }
 
     const controller = new AbortController();
     this.activeRequests.set(requestId, controller);

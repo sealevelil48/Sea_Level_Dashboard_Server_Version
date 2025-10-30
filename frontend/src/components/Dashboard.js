@@ -97,19 +97,52 @@ function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch stations on mount
+  // Fetch stations on mount with retry
   useEffect(() => {
-    fetchStations();
-    fetchSeaForecast();
+    const initializeData = async () => {
+      // Try fetching stations up to 3 times
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await fetchStations();
+          break; // Success, exit retry loop
+        } catch (error) {
+          console.warn(`Station fetch attempt ${attempt} failed:`, error);
+          if (attempt === 3) {
+            console.error('All station fetch attempts failed, using fallback');
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      }
+      
+      // Fetch forecast (non-critical)
+      try {
+        await fetchSeaForecast();
+      } catch (error) {
+        console.warn('Sea forecast fetch failed:', error);
+      }
+    };
+    
+    initializeData();
   }, []);
 
   const fetchStations = async () => {
     try {
       setLoading(true);
+      // Clear any previous requests
+      apiService.cancelAllRequests();
+      
       const data = await apiService.getStations();
+      console.log('Stations fetched successfully:', data);
       setStations(data.stations || []);
     } catch (error) {
-      console.error('Error fetching stations:', error);
+      // Only log non-cancellation errors
+      if (error.message !== 'Request cancelled') {
+        console.error('Error fetching stations:', error);
+      }
+      // Fallback to hardcoded stations if API fails
+      setStations(['All Stations', 'Acre', 'Ashdod', 'Ashkelon', 'Eilat', 'Haifa', 'Yafo']);
     } finally {
       setLoading(false);
     }
