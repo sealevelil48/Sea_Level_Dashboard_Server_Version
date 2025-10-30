@@ -1008,6 +1008,16 @@ function Dashboard() {
 
         {/* Main Content */}
         <Container fluid className="p-1 p-md-3">
+        
+        {/* IMS Warnings Card - Mobile: Below header, above filters */}
+        {isMobile && (
+          <Row className="mb-3">
+            <Col xs={12}>
+              <WarningsCard apiBaseUrl={API_BASE_URL} />
+            </Col>
+          </Row>
+        )}
+        
         <Row className="g-2">
           {/* FILTERS COLUMN - Collapsible on Mobile */}
           <Col xs={12} lg={3} xl={2}>
@@ -1221,12 +1231,14 @@ function Dashboard() {
 
           {/* Content Column */}
           <Col xs={12} lg={9} xl={10}>
-            {/* IMS Warnings Card - Above stats on desktop, below filters on mobile */}
-            <Row className="mb-3">
-              <Col xs={12}>
-                <WarningsCard apiBaseUrl={API_BASE_URL} />
-              </Col>
-            </Row>
+            {/* IMS Warnings Card - Desktop only (mobile version is above filters) */}
+            {!isMobile && (
+              <Row className="mb-3">
+                <Col xs={12}>
+                  <WarningsCard apiBaseUrl={API_BASE_URL} />
+                </Col>
+              </Row>
+            )}
 
             {/* Stats Cards - Responsive Grid */}
             <Row className="mb-3">
