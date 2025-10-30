@@ -9,7 +9,7 @@ import {
   parseSwellInfo 
 } from '../utils/imsCodeTranslations';
 
-const MarinersForecastView = ({ apiBaseUrl }) => {
+const MarinersForecastView = ({ apiBaseUrl, isFullscreen = false }) => {
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -177,7 +177,10 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
       >
         <Tab eventKey="table" title="Table View">
           {activeTab === 'table' && (
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ 
+              overflowX: 'auto',
+              maxHeight: isFullscreen ? 'calc(100vh - 200px)' : 'clamp(400px, 60vh, 600px)'
+            }}>
               <Table 
                 striped 
                 bordered 
@@ -266,7 +269,7 @@ const MarinersForecastView = ({ apiBaseUrl }) => {
           <div 
             style={{ 
               width: '100%', 
-              height: isMobile ? '350px' : 'clamp(400px, 60vh, 600px)', 
+              height: isFullscreen ? 'calc(100vh - 200px)' : (isMobile ? '350px' : 'clamp(400px, 60vh, 600px)'), 
               border: '1px solid #2a4a8c', 
               borderRadius: '8px', 
               overflow: 'hidden' 
