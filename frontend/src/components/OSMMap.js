@@ -1,16 +1,34 @@
-// frontend/src/components/OSMMap.js - Fixed version with proper centering
+// frontend/src/components/OSMMap.js - Optimized version with lazy loading
 import React, { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { parseWindInfo, parseWaveHeight } from '../utils/imsCodeTranslations';
 
-// Fix for default markers in React
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
-});
+// Lazy load Leaflet only when needed
+let L = null;
+let leafletLoaded = false;
+
+const loadLeaflet = async () => {
+  if (leafletLoaded) return L;
+  
+  try {
+    const leafletModule = await import('leaflet');
+    await import('leaflet/dist/leaflet.css');
+    L = leafletModule.default;
+    
+    // Fix for default markers in React
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
+    });
+    
+    leafletLoaded = true;
+    return L;
+  } catch (error) {
+    console.error('Failed to load Leaflet:', error);
+    throw error;
+  }
+};
 
 const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
   const mapRef = useRef(null);
@@ -18,6 +36,7 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
   const markersRef = useRef({});
   const [isVisible, setIsVisible] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Track window resize for responsive map
   useEffect(() => {
@@ -100,33 +119,51 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
     };
   }, []);
 
-  // Initialize map when visible
+  // Initialize map when visible - with better error handling
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current || !isVisible) return;
     
     // Prevent double initialization
-    if (mapRef.current.dataset.initializing) return;
+    if (mapRef.current.dataset.initializing === 'true') return;
     mapRef.current.dataset.initializing = 'true';
 
-    const initMap = () => {
+    const initMap = async () => {
       try {
-        console.log('Initializing OSM map...');
-        mapInstanceRef.current = L.map(mapRef.current, {
+        // Double-check element still exists and is visible
+        if (!mapRef.current || !isVisible) {
+          console.log('OSM map element no longer available, skipping initialization');
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('Loading Leaflet and initializing OSM map...');
+        const LeafletLib = await loadLeaflet();
+        
+        if (!mapRef.current || !isVisible) {
+          console.log('OSM map element no longer available after Leaflet load');
+          setIsLoading(false);
+          return;
+        }
+
+        mapInstanceRef.current = LeafletLib.map(mapRef.current, {
           center: [31.5, 34.8],
           zoom: 7,
-          zoomControl: true
+          zoomControl: true,
+          preferCanvas: true
         });
         
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        LeafletLib.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors',
           maxZoom: 18
         }).addTo(mapInstanceRef.current);
         
         console.log('OSM map initialized successfully');
+        setIsLoading(false);
 
         // Add station markers
         Object.entries(stationCoordinates).forEach(([station, coords]) => {
-          const marker = L.marker(coords).addTo(mapInstanceRef.current);
+          if (!mapInstanceRef.current) return;
+          const marker = LeafletLib.marker(coords).addTo(mapInstanceRef.current);
           marker.bindTooltip(station);
           marker.bindPopup(`<h4>${station}</h4><p>Loading data...</p>`);
           markersRef.current[station] = marker;
@@ -134,66 +171,37 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
 
         // Center map properly after everything loads
         setTimeout(() => {
-          if (mapInstanceRef.current) {
-            console.log('Resizing map and fitting bounds');
-            // Force multiple resize attempts to ensure proper rendering
+          if (mapInstanceRef.current && mapRef.current) {
             mapInstanceRef.current.invalidateSize(true);
-            setTimeout(() => mapInstanceRef.current.invalidateSize(true), 100);
-            setTimeout(() => mapInstanceRef.current.invalidateSize(true), 300);
-            
             const allMarkers = Object.values(markersRef.current).filter(m => m);
             if (allMarkers.length > 0) {
-              const group = new L.featureGroup(allMarkers);
+              const group = new LeafletLib.featureGroup(allMarkers);
               mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
             }
-            console.log('Map setup complete');
-            
-            // Mark initialization complete
             if (mapRef.current) {
               mapRef.current.dataset.initializing = 'false';
-            }
-            
-            // Add Sea of Galilee marker if forecast data is available
-            if (forecastData?.locations) {
-              const seaOfGalilee = forecastData.locations.find(loc => loc.name_eng === 'Sea of Galilee');
-              if (seaOfGalilee && !markersRef.current['forecast_sea_of_galilee']) {
-                console.log('Adding Sea of Galilee marker after map setup');
-                const coords = [seaOfGalilee.coordinates.lat, seaOfGalilee.coordinates.lng];
-                const marker = L.marker(coords).addTo(mapInstanceRef.current);
-                
-                const currentForecast = seaOfGalilee.forecasts[0];
-                const waveHeight = currentForecast?.elements?.wave_height ? parseWaveHeight(currentForecast.elements.wave_height) : 'N/A';
-                const windInfo = currentForecast?.elements?.wind ? parseWindInfo(currentForecast.elements.wind) : 'N/A';
-                
-                const popupContent = `
-                  <div style="font-family: Arial, sans-serif; min-width: 200px;">
-                    <h4 style="margin: 0 0 10px 0; color: #1e6bc4;">${seaOfGalilee.name_eng}</h4>
-                    <p><strong>Wave Height:</strong> ${waveHeight}</p>
-                    <p><strong>Sea Temperature:</strong> ${currentForecast?.elements?.sea_temperature || 'N/A'}°C</p>
-                    <p><strong>Wind:</strong> ${windInfo}</p>
-                    <p><strong>Forecast Period:</strong><br/>${currentForecast?.from || 'N/A'} - ${currentForecast?.to || 'N/A'}</p>
-                    <p style="font-size: 11px; color: #888;">
-                      <a href="https://ims.gov.il/he/coasts" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: none;">IMS Forecast ©</a>
-                    </p>
-                  </div>
-                `;
-                
-                marker.bindPopup(popupContent);
-                marker.bindTooltip('Sea of Galilee');
-                markersRef.current['forecast_sea_of_galilee'] = marker;
-              }
             }
           }
         }, 300);
         
       } catch (error) {
         console.error('Map initialization error:', error);
+        setIsLoading(false);
+        if (mapRef.current) {
+          mapRef.current.dataset.initializing = 'false';
+        }
       }
     };
 
-    setTimeout(initMap, 100);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible, mapData, forecastData]);
+    // Delay initialization to ensure DOM is ready
+    const timeoutId = setTimeout(() => {
+      initMap().catch(error => {
+        console.error('Failed to initialize map:', error);
+        setIsLoading(false);
+      });
+    }, 200);
+    return () => clearTimeout(timeoutId);
+  }, [isVisible]);
 
   // Add Sea of Galilee marker when forecast data changes
   useEffect(() => {
@@ -212,7 +220,7 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
       
       // Find Sea of Galilee forecast data
       const seaOfGalilee = forecastData.locations.find(loc => loc.name_eng === 'Sea of Galilee');
-      if (!seaOfGalilee) return;
+      if (!seaOfGalilee || !leafletLoaded) return;
       
       const coords = [seaOfGalilee.coordinates.lat, seaOfGalilee.coordinates.lng];
       const marker = L.marker(coords).addTo(mapInstanceRef.current);
@@ -423,9 +431,31 @@ const OSMMap = ({ stations, currentStation, mapData, forecastData }) => {
         borderRadius: '8px',
         border: '1px solid #2a4a8c',
         position: 'relative',
-        zIndex: 1
+        zIndex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }} 
-    />
+    >
+      {isLoading && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1000,
+          background: 'rgba(255, 255, 255, 0.9)',
+          padding: '20px',
+          borderRadius: '8px',
+          textAlign: 'center'
+        }}>
+          <div style={{ marginBottom: '10px' }}>Loading OpenStreetMap...</div>
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
