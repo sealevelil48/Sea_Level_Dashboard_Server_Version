@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>Sea Level API Test</h1>
+    <button onclick="testStations()">Test Stations</button>
+    <button onclick="testAshkelon()">Test Ashkelon Data</button>
+    <div id="results"></div>
+
+    <script>
+        const API_URL = 'http://5.102.231.16:30886';
+        const results = document.getElementById('results');
+
+        async function testStations() {
+            results.innerHTML = '<p>Testing stations...</p>';
+            try {
+                const response = await fetch(`${API_URL}/api/stations`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                results.innerHTML = `<p>✅ Success! Stations: ${JSON.stringify(data, null, 2)}</p>`;
+            } catch (error) {
+                results.innerHTML = `<p>❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testAshkelon() {
+            results.innerHTML = '<p>Testing Ashkelon data...</p>';
+            try {
+                const response = await fetch(`${API_URL}/api/data?station=Ashkelon&start_date=2025-10-29&end_date=2025-10-30`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                results.innerHTML = `<p>✅ Success! Ashkelon data points: ${data.length}</p>`;
+            } catch (error) {
+                results.innerHTML = `<p>❌ Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
