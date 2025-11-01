@@ -5,6 +5,7 @@ import sys
 import os
 import pandas as pd
 import numpy as np
+import hashlib
 from datetime import datetime, timedelta
 
 # Add paths for shared modules
@@ -47,7 +48,7 @@ def clean_numeric_data(df):
     return df
 
 def load_data_from_db(start_date=None, end_date=None, station=None, data_source='default', limit=15000):
-    """Load data from database using raw SQL with proper data cleaning"""
+    """Load data from database using raw SQL with Redis caching"""
     if not DATABASE_AVAILABLE or not engine:
         logger.warning("Database not available, returning demo data")
         return pd.DataFrame([
@@ -59,6 +60,23 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
                 "anomaly": 0
             }
         ])
+    
+    # Generate cache key
+    cache_params = {
+        'start_date': start_date,
+        'end_date': end_date,
+        'station': station,
+        'data_source': data_source,
+        'limit': limit
+    }
+    cache_key = f"data_cache:{hashlib.md5(json.dumps(cache_params, sort_keys=True).encode()).hexdigest()}"
+    
+    # Try cache first
+    if db_manager and hasattr(db_manager, 'get_from_cache'):
+        cached_data = db_manager.get_from_cache(cache_key)
+        if cached_data:
+            logger.info(f"Cache HIT: Loaded {len(cached_data)} rows from cache for station={station}")
+            return pd.DataFrame(cached_data)
     
     try:
         # Build raw SQL query
@@ -126,8 +144,18 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
                 # Process anomalies if requested
                 if 'anomaly' not in df.columns:
                     df['anomaly'] = 0
-                    
-            logger.info(f"Loaded {len(df)} rows for station={station}, data_source={data_source}")
+                
+                # Cache the result (TTL: 2 minutes)
+                if db_manager and hasattr(db_manager, 'set_cache'):
+                    try:
+                        cache_data = df.to_dict('records')
+                        db_manager.set_cache(cache_key, cache_data, ttl=120)
+                        logger.info(f"Cache MISS: Stored {len(df)} rows in cache for station={station}")
+                    except Exception as e:
+                        logger.warning(f"Failed to cache data: {e}")
+                else:
+                    logger.info(f"Cache MISS: Loaded {len(df)} rows for station={station}, data_source={data_source}")
+            
             return df
             
     except Exception as e:
