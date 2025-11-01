@@ -22,51 +22,104 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const WIND_DIRECTION_CODES = {
-            '000': 'N', '045': 'NE', '090': 'E', '135': 'SE',
-            '180': 'S', '225': 'SW', '270': 'W', '315': 'NW', '360': 'N'
+            '000': 'Northerly', '045': 'North Easterly', '090': 'Easterly', '135': 'South Easterly',
+            '180': 'Southerly', '225': 'South Westerly', '270': 'Westerly', '315': 'North Westerly', '360': 'Northerly'
         };
         
         const WEATHER_CODES = {
-            '1000': 'Clear', '1100': 'Mostly Clear', '1200': 'Partly Cloudy',
-            '1220': 'Partly Cloudy', '1250': 'Mostly Cloudy', '1300': 'Cloudy',
-            '2000': 'Fog', '4001': 'Rain', '5000': 'Snow', '8000': 'Thunderstorm'
+            1010: "Sandstorms", 1020: "Thunderstorms", 1060: "Snow", 1070: "Light snow", 1080: "Sleet",
+            1140: "Rainy", 1160: "Fog", 1220: "Partly cloudy", 1230: "Cloudy", 1250: "Clear",
+            1260: "Windy", 1270: "Muggy", 1300: "Frost", 1310: "Hot", 1320: "Cold",
+            1510: "Stormy", 1520: "Heavy snow", 1530: "Partly cloudy, possible rain", 1540: "Cloudy, possible rain",
+            1560: "Cloudy, light rain", 1570: "Dust", 1580: "Extremely hot", 1590: "Extremely cold",
+            1030: "Hail", 1040: "Blowing Snow, Blizzard, Snowdrift, Snowstorm", 1050: "Snow Showers, Flurries",
+            1090: "Showers, Heavy Showers", 1100: "Occasional Showers, Scattered Showers", 1110: "Isolated Showers",
+            1120: "Light Showers", 1130: "Freezing Rain", 1150: "Drizzle, Light Rain", 1170: "Mist",
+            1180: "Smoke", 1190: "Haze", 1200: "Overcast", 1210: "Sunny Interval, No Rain, Clearing",
+            1240: "Bright, Sunny, Fair", 1280: "Dry", 1290: "Freezing", 1330: "Warming", 1340: "Cooling"
         };
         
+        const SEA_STATE_CODES = {
+            10: "Calm", 20: "Rippled", 30: "Smooth", 40: "Smooth to slight", 50: "Slight",
+            55: "Slight to moderate", 60: "Moderate", 70: "Moderate to rough", 80: "Rough",
+            90: "Rough to very rough", 110: "Very rough", 120: "Very rough to high", 130: "High",
+            140: "High to very high", 150: "Very high", 160: "Phenomenal",
+            161: "Smooth. Becoming slight.", 162: "Smooth. Becoming slight during day time.",
+            163: "Smooth. Becoming tomorrow slight to moderate.", 164: "Smooth. Becoming slight to moderate",
+            165: "Smooth to slight. Becoming moderate", 166: "Smooth at west coast, slight at east coast",
+            167: "Smooth to slight. Becoming slight to moderate.", 168: "Slight. Becoming moderate.",
+            169: "Smooth to slight. Becoming moderate to rough.", 170: "Slight over Western bank, moderate over Eastern bank.",
+            171: "Slight to moderate. Becoming moderate to rough"
+        };
+        
+        function translateWindDirection(direction) {
+            const dirStr = String(direction).padStart(3, '0');
+            return WIND_DIRECTION_CODES[dirStr] || direction;
+        }
+        
         function translateWind(windStr) {
-            if (!windStr) return windStr;
+            if (!windStr || typeof windStr !== 'string') return windStr;
             const parts = windStr.split('/');
             if (parts.length !== 2) return windStr;
             
-            const directionPart = parts[0].trim();
-            const speedPart = parts[1].trim();
+            const [directions, speeds] = parts;
             
-            let directionText = directionPart;
-            if (directionPart.includes('-')) {
-                const [start, end] = directionPart.split('-');
-                const startDir = WIND_DIRECTION_CODES[start] || start;
-                const endDir = WIND_DIRECTION_CODES[end] || end;
-                directionText = `${startDir}-${endDir}`;
+            let translatedDirections = directions;
+            if (directions.includes('-')) {
+                const [dir1, dir2] = directions.split('-');
+                const trans1 = translateWindDirection(dir1.padStart(3, '0'));
+                const trans2 = translateWindDirection(dir2.padStart(3, '0'));
+                translatedDirections = `${trans1}-${trans2}`;
             } else {
-                directionText = WIND_DIRECTION_CODES[directionPart] || directionPart;
+                translatedDirections = translateWindDirection(directions.padStart(3, '0'));
             }
             
-            return `${directionText} (${speedPart} km/h)`;
+            return `${translatedDirections} (${speeds.trim()} km/h)`;
         }
         
-        function translateWeatherCode(weatherCode) {
-            if (!weatherCode) return weatherCode;
-            return WEATHER_CODES[weatherCode] || weatherCode;
+        function translateWeatherCode(code) {
+            const numCode = parseInt(code);
+            return WEATHER_CODES[numCode] || code;
+        }
+        
+        function translateSeaStateCode(code) {
+            const numCode = parseInt(code);
+            return SEA_STATE_CODES[numCode] || code;
         }
         
         function translateSeaStatus(seaStr) {
-            if (!seaStr) return seaStr;
+            if (!seaStr || typeof seaStr !== 'string') return seaStr;
             const parts = seaStr.split(' / ');
-            if (parts.length !== 2) return seaStr;
-            const code = parts[0].trim();
-            const height = parts[1].trim();
-            const seaCodes = {'10': 'Calm', '20': 'Smooth', '30': 'Slight', '40': 'Light', '50': 'Slight', '60': 'Moderate', '70': 'Rough', '80': 'Very Rough', '90': 'High', '95': 'Very High'};
-            const description = seaCodes[code] || code;
-            return `${description} (${height} cm)`;
+            if (parts.length !== 2) {
+                return translateSeaStateCode(seaStr.trim());
+            }
+            const [code, actualHeight] = parts;
+            const translatedCode = translateSeaStateCode(code.trim());
+            return `${translatedCode} (${actualHeight.trim()} cm)`;
+        }
+        
+        function translateSwellInfo(swellStr) {
+            if (!swellStr || typeof swellStr !== 'string') return swellStr;
+            const parts = swellStr.split(' / ');
+            if (parts.length !== 2) {
+                const code = swellStr.trim();
+                const windDir = translateWindDirection(code.padStart(3, '0'));
+                if (windDir !== code) {
+                    return windDir;
+                }
+                return translateSeaStateCode(code);
+            }
+            
+            const [code, actualHeight] = parts;
+            const codeStr = code.trim();
+            
+            const windDir = translateWindDirection(codeStr.padStart(3, '0'));
+            if (windDir !== codeStr) {
+                return `${windDir} (${actualHeight.trim()} cm)`;
+            }
+            
+            const translatedCode = translateSeaStateCode(codeStr);
+            return `${translatedCode} (${actualHeight.trim()} cm)`;
         }
         
         const map = L.map('map').setView([33.0, 34.0], 7);
@@ -125,6 +178,12 @@
                             displayValue = translateWeatherCode(value);
                         } else if (name === 'Sea status and waves height') {
                             displayValue = translateSeaStatus(value);
+                        } else if (name === 'Swell') {
+                            displayValue = translateSwellInfo(value);
+                        } else if (name === 'Pressure') {
+                            displayValue = `${value} hPa`;
+                        } else if (name === 'Visibility') {
+                            displayValue = `${value} nm`;
                         }
                         
                         popupContent += `<div class="forecast-element">
