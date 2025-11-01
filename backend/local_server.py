@@ -320,7 +320,24 @@ async def health_check():
             health_status["database"] = "connected"
             # Add performance metrics if available
             if hasattr(db_manager, 'get_metrics'):
-                health_status["metrics"] = db_manager.get_metrics()
+                metrics = db_manager.get_metrics()
+                health_status["metrics"] = metrics
+                
+                # Add Redis cache status
+                if db_manager._redis_client:
+                    try:
+                        redis_info = db_manager._redis_client.info('stats')
+                        health_status["cache"] = {
+                            "status": "connected",
+                            "hits": redis_info.get('keyspace_hits', 0),
+                            "misses": redis_info.get('keyspace_misses', 0),
+                            "hit_rate": metrics.get('cache_hit_rate', '0%'),
+                            "keys": db_manager._redis_client.dbsize()
+                        }
+                    except:
+                        health_status["cache"] = {"status": "error"}
+                else:
+                    health_status["cache"] = {"status": "disabled"}
         else:
             health_status["database"] = "disconnected"
     except Exception as e:
@@ -373,9 +390,17 @@ async def get_data(
         # Add performance headers
         duration = (time.time() - start_time) * 1000
         result = lambda_to_fastapi_response(response)
+        
+        # Add cache and performance headers
         if hasattr(result, 'headers'):
             result.headers['X-Response-Time'] = f"{duration:.0f}ms"
-            result.headers['Cache-Control'] = 'public, max-age=120'  # 2 minutes cache
+            result.headers['Cache-Control'] = 'public, max-age=120'
+            
+            # Determine cache status from logs
+            if duration < 200:  # Fast response likely from cache
+                result.headers['X-Cache'] = 'HIT'
+            else:
+                result.headers['X-Cache'] = 'MISS'
         
         return result
     except Exception as e:
