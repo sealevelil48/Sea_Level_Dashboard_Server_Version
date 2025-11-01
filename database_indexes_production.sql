@@ -101,6 +101,24 @@ WHERE schemaname = 'public'
 ORDER BY pg_relation_size(indexrelid) DESC;
 
 -- ============================================================================
+-- MAINTENANCE QUERIES (Run periodically)
+-- ============================================================================
+
+-- Check for unused indexes (run after 1 week)
+-- SELECT 
+--     schemaname,
+--     tablename,
+--     indexname,
+--     idx_scan
+-- FROM pg_stat_user_indexes 
+-- WHERE schemaname = 'public' 
+--     AND idx_scan = 0
+-- ORDER BY pg_relation_size(indexrelid) DESC;
+
+-- Reindex if needed (during maintenance window)
+-- REINDEX INDEX CONCURRENTLY idx_monitors_datetime;
+
+-- ============================================================================
 -- EXPECTED PERFORMANCE IMPROVEMENTS
 -- ============================================================================
 -- Before: Data queries take 1,870ms (full table scan)
