@@ -46,7 +46,7 @@ def clean_numeric_data(df):
     
     return df
 
-def load_data_from_db(start_date=None, end_date=None, station=None, data_source='default'):
+def load_data_from_db(start_date=None, end_date=None, station=None, data_source='default', limit=15000):
     """Load data from database using raw SQL with proper data cleaning"""
     if not DATABASE_AVAILABLE or not engine:
         logger.warning("Database not available, returning demo data")
@@ -81,6 +81,9 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
             if end_date:
                 sql_query += ' AND "Date" <= :end_date'
                 params['end_date'] = end_date
+            
+            sql_query += ' ORDER BY "Date" ASC LIMIT :limit'
+            params['limit'] = limit
                 
         else:
             # Default sea level data
@@ -105,7 +108,8 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
                 sql_query += ' AND m."Tab_DateTime" <= :end_date'
                 params['end_date'] = end_date + ' 23:59:59'
                 
-            sql_query += ' ORDER BY m."Tab_DateTime"'
+            sql_query += ' ORDER BY m."Tab_DateTime" ASC LIMIT :limit'
+            params['limit'] = limit
             
         # Execute query
         with engine.connect() as connection:
@@ -172,12 +176,19 @@ def lambda_handler(event, context):
         end_date = params.get('end_date')
         data_source = params.get('data_source', 'default')
         show_anomalies = params.get('show_anomalies', 'false').lower() == 'true'
+        limit = int(params.get('limit', 15000))  # Increased default for full week coverage
+        
+        # Validate and cap limit - but allow unlimited for All Stations
+        if limit <= 0:
+            limit = 15000
+        if limit > 50000 and station != 'All Stations':
+            limit = 50000  # Increased safety cap for longer date ranges
 
         logger.info(f"get_data called with: station={station}, start_date={start_date}, "
                    f"end_date={end_date}, data_source={data_source}")
 
-        # Load data
-        df = load_data_from_db(start_date, end_date, station, data_source)
+        # Load data with limit
+        df = load_data_from_db(start_date, end_date, station, data_source, limit)
         
         # Apply anomaly detection if requested
         if show_anomalies and data_source == 'default':

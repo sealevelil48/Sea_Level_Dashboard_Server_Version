@@ -80,11 +80,11 @@ const WarningsCard = ({ apiBaseUrl }) => {
 
   const handleTouchStart = (e) => {
     setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientY);
+    setTouchStart(e.targetTouches[0].clientX);
   };
 
   const handleTouchMove = (e) => {
-    setTouchEnd(e.targetTouches[0].clientY);
+    setTouchEnd(e.targetTouches[0].clientX);
   };
 
   const handleTouchEnd = () => {
@@ -92,12 +92,12 @@ const WarningsCard = ({ apiBaseUrl }) => {
     if (!isExpanded || warnings.length <= 1) return;
     
     const distance = touchStart - touchEnd;
-    const isUpSwipe = distance > 50;
-    const isDownSwipe = distance < -50;
+    const isRightToLeftSwipe = distance > 50;
+    const isLeftToRightSwipe = distance < -50;
     
-    if (isUpSwipe) {
+    if (isRightToLeftSwipe) {
       setCurrentIndex(prev => (prev + 1) % warnings.length);
-    } else if (isDownSwipe) {
+    } else if (isLeftToRightSwipe) {
       setCurrentIndex(prev => (prev - 1 + warnings.length) % warnings.length);
     }
   };
@@ -117,7 +117,7 @@ const WarningsCard = ({ apiBaseUrl }) => {
           cursor: 'pointer',
           marginBottom: index < warnings.length - 1 ? '8px' : '0',
           padding: '2px 0',
-          touchAction: isExpanded && warnings.length > 1 ? 'pan-y' : 'auto'
+          touchAction: isExpanded && warnings.length > 1 ? 'pan-x' : 'auto'
         }}
       >
         {badge && (
@@ -172,7 +172,7 @@ const WarningsCard = ({ apiBaseUrl }) => {
           </h6>
           {isMobile && isExpanded && warningCount > 1 && (
             <div style={{ fontSize: '0.7rem', color: '#4dabf5' }}>
-              {currentIndex + 1}/{warningCount} • Swipe ↕️
+              {currentIndex + 1}/{warningCount} • Swipe ↔️
             </div>
           )}
         </div>

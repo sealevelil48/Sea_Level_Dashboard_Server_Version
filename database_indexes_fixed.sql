@@ -1,8 +1,8 @@
 -- ============================================================================
--- Sea Level Dashboard - Production Database Indexes
+-- Sea Level Dashboard - Production Database Indexes (FIXED VERSION)
 -- ============================================================================
--- CRITICAL: Use CONCURRENTLY to avoid locking tables during index creation
--- This allows reads/writes to continue during indexing (takes longer but safe)
+-- FIXED: Removed CONCURRENTLY to avoid transaction block issues
+-- This will create indexes with brief table locks (acceptable for most cases)
 -- ============================================================================
 
 -- Check existing indexes first
@@ -20,19 +20,19 @@ ORDER BY tablename, indexname;
 -- ============================================================================
 
 -- 1. DateTime index - Used in ALL date range queries (60-70% improvement)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_monitors_datetime 
+CREATE INDEX IF NOT EXISTS idx_monitors_datetime 
 ON "Monitors_info2" ("Tab_DateTime");
 
 -- 2. TabularTag index - Used in JOIN operations (50% improvement on joins)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_monitors_tag 
+CREATE INDEX IF NOT EXISTS idx_monitors_tag 
 ON "Monitors_info2" ("Tab_TabularTag");
 
 -- 3. Station index - Used for station filtering
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_locations_station 
+CREATE INDEX IF NOT EXISTS idx_locations_station 
 ON "Locations" ("Station");
 
 -- 4. Locations join index
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_locations_tag 
+CREATE INDEX IF NOT EXISTS idx_locations_tag 
 ON "Locations" ("Tab_TabularTag");
 
 -- ============================================================================
@@ -40,11 +40,11 @@ ON "Locations" ("Tab_TabularTag");
 -- ============================================================================
 
 -- 5. DateTime + Tag composite - Optimizes filtered joins
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_monitors_datetime_tag 
+CREATE INDEX IF NOT EXISTS idx_monitors_datetime_tag 
 ON "Monitors_info2" ("Tab_DateTime" DESC, "Tab_TabularTag");
 
 -- 6. DateTime + Depth - For anomaly detection queries
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_monitors_datetime_depth 
+CREATE INDEX IF NOT EXISTS idx_monitors_datetime_depth 
 ON "Monitors_info2" ("Tab_DateTime", "Tab_Value_mDepthC1")
 WHERE "Tab_Value_mDepthC1" IS NOT NULL;
 
@@ -53,17 +53,17 @@ WHERE "Tab_Value_mDepthC1" IS NOT NULL;
 -- ============================================================================
 
 -- 7. Non-null sea level values (saves space, faster for valid data queries)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_monitors_depth_notnull 
+CREATE INDEX IF NOT EXISTS idx_monitors_depth_notnull 
 ON "Monitors_info2" ("Tab_Value_mDepthC1") 
 WHERE "Tab_Value_mDepthC1" IS NOT NULL;
 
 -- 8. Non-null temperature values
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_monitors_temp_notnull 
+CREATE INDEX IF NOT EXISTS idx_monitors_temp_notnull 
 ON "Monitors_info2" ("Tab_Value_monT2m") 
 WHERE "Tab_Value_monT2m" IS NOT NULL;
 
 -- 9. Recent data index (last 90 days) - Frequently accessed
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_monitors_recent 
+CREATE INDEX IF NOT EXISTS idx_monitors_recent 
 ON "Monitors_info2" ("Tab_DateTime" DESC, "Tab_TabularTag", "Tab_Value_mDepthC1")
 WHERE "Tab_DateTime" > CURRENT_DATE - INTERVAL '90 days';
 
@@ -72,7 +72,7 @@ WHERE "Tab_DateTime" > CURRENT_DATE - INTERVAL '90 days';
 -- ============================================================================
 
 -- 10. SeaTides date + station composite
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_seatides_date_station 
+CREATE INDEX IF NOT EXISTS idx_seatides_date_station 
 ON "SeaTides" ("Date", "Station");
 
 -- ============================================================================
@@ -92,10 +92,7 @@ SELECT
     schemaname,
     tablename,
     indexname,
-    pg_size_pretty(pg_relation_size(indexrelid)) AS index_size,
-    idx_scan as times_used,
-    idx_tup_read as tuples_read,
-    idx_tup_fetch as tuples_fetched
+    pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
 FROM pg_stat_user_indexes 
 WHERE schemaname = 'public'
 ORDER BY pg_relation_size(indexrelid) DESC;
