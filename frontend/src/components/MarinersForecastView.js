@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Row, Col, Button, Spinner, Tabs, Tab, Table } from 'react-bootstrap';
 import { 
   parseWindInfo, 
@@ -26,11 +26,16 @@ const MarinersForecastView = ({ apiBaseUrl, isFullscreen = false }) => {
 
   const isMobile = windowWidth < 768;
 
+  // Stabilize API URL to prevent duplicate calls
+  const stableApiUrl = useMemo(() => {
+    return apiBaseUrl || process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886';
+  }, [apiBaseUrl]);
+
   const fetchForecastData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${apiBaseUrl}/api/mariners-forecast`);
+      const response = await fetch(`${stableApiUrl}/api/mariners-forecast`);
       
       if (response.ok) {
         const data = await response.json();
@@ -44,7 +49,7 @@ const MarinersForecastView = ({ apiBaseUrl, isFullscreen = false }) => {
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl]);
+  }, [stableApiUrl]);
 
   useEffect(() => {
     fetchForecastData();
@@ -281,7 +286,7 @@ const MarinersForecastView = ({ apiBaseUrl, isFullscreen = false }) => {
             })()}
             {iframeCreated && (
               <iframe
-                src={`${apiBaseUrl}/api/mariners-mapframe`}
+                src={`${stableApiUrl}/api/mariners-mapframe`}
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title="Mariners Forecast Map"
                 allow="geolocation; accelerometer; clipboard-write"

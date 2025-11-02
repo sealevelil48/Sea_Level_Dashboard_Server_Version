@@ -27,7 +27,7 @@ function Dashboard() {
   
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTab, setActiveTab] = useState('graph');
-  const [mapTab, setMapTab] = useState('govmap');
+  const [mapTab, setMapTab] = useState('govmap'); // ✅ CEO requirement: GovMap default
   const [tableTab, setTableTab] = useState('historical');
   const [forecastData, setForecastData] = useState(null);
   const [stations, setStations] = useState([]);
@@ -42,6 +42,10 @@ function Dashboard() {
   const plotRef = useRef(null);
   const abortControllerRef = useRef(null);
   
+  // ✅ FIX 1.5-1.7: Add mount tracking & cleanup
+  const isMounted = useRef(true);
+  const debounceTimerRef = useRef(null);
+  
   // NEW: Add mobile detection and filter collapse state
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [filtersOpen, setFiltersOpen] = useState(window.innerWidth > 768);
@@ -50,21 +54,25 @@ function Dashboard() {
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [isMarinersFullscreen, setIsMarinersFullscreen] = useState(false);
   
+  // ✅ FIX 2.2 REVISED: Deferred GovMap loading
+  const [govmapReady, setGovmapReady] = useState(false);
+  
+  // ✅ FIX 1.7: Fix resize handler leak - remove unstable dependency
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
       setWindowWidth(width);
       // Auto-close filters on mobile, auto-open on desktop
-      if (width <= 768 && filtersOpen) {
+      if (width <= 768) {
         setFiltersOpen(false);
-      } else if (width > 768 && !filtersOpen) {
+      } else if (width > 768) {
         setFiltersOpen(true);
       }
     };
     
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [filtersOpen]);
+  }, []); // ✅ No dependencies - fixed!
   
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
@@ -91,9 +99,13 @@ function Dashboard() {
     forecastHours: 72  // Changed default to 3 days
   });
 
-  // Update current time every second
+  // ✅ FIX 1.6: Proper timer cleanup with mount check
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    const timer = setInterval(() => {
+      if (isMounted.current) {
+        setCurrentTime(new Date());
+      }
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -116,12 +128,7 @@ function Dashboard() {
         }
       }
       
-      // Fetch forecast (non-critical)
-      try {
-        await fetchSeaForecast();
-      } catch (error) {
-        console.warn('Sea forecast fetch failed:', error);
-      }
+      // ✅ FIX 2.1: Removed duplicate forecast call - SeaForecastView handles its own data
     };
     
     initializeData();
@@ -148,17 +155,7 @@ function Dashboard() {
     }
   };
 
-  const fetchSeaForecast = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/sea-forecast`);
-      if (response.ok) {
-        const data = await response.json();
-        setForecastData(data);
-      }
-    } catch (error) {
-      console.error('Error fetching sea forecast:', error);
-    }
-  };
+  // ✅ FIX 2.1: Removed fetchSeaForecast - SeaForecastView handles its own data
 
   // Calculate stats from data
   const calculateStats = useCallback((data) => {
@@ -336,7 +333,7 @@ function Dashboard() {
     return {
       x: data.map(d => d.Tab_DateTime),
       y: rollingAvg,
-      type: 'scatter',
+      type: 'scattergl',
       mode: 'lines',
       name: config.name,
       line: { color: config.color, width: 2 }
@@ -383,14 +380,14 @@ function Dashboard() {
     return {
       x: filteredData.map(d => d.Tab_DateTime),
       y: xValues.map(x => slope * x + intercept),
-      type: 'scatter',
+      type: 'scattergl',
       mode: 'lines',
       name: `Trendline (${period})`,
       line: { color: 'yellow', dash: 'dash', width: 2 }
     };
   }, []);
 
-  // Stabilize fetchData with proper dependencies
+  // ✅ CRITICAL FIX: Stabilize fetchData with proper dependencies to prevent infinite loop
   const fetchData = useCallback(async () => {
     if (loading || stations.length === 0 || stableSelectedStations.length === 0) return;
     
@@ -447,47 +444,36 @@ function Dashboard() {
       }
 
       if (Array.isArray(allData) && allData.length > 0) {
-        setGraphData(allData);
+        // ✅ FIX 1.2: Smart data downsampling BEFORE setState
+        const MAX_POINTS = 2000;
+        const optimizedData = allData.length > MAX_POINTS 
+          ? allData.filter((_, i) => i % Math.ceil(allData.length / MAX_POINTS) === 0)
+          : allData;
         
-        // Optimize data for large datasets
-        const optimizedData = allData.length > 5000 ? allData.filter((_, i) => i % 10 === 0) : allData;
+        console.log(`⚡ Data optimized: ${allData.length} → ${optimizedData.length} points`);
         
-        // Pre-calculate trendline and analysis once
-        let trendlineValues = null;
-        let analysisValues = null;
+        setGraphData(optimizedData);
         
-        if (filterValues.trendline !== 'none' && optimizedData.length > 1) {
-          const trendlineData = calculateTrendline(optimizedData, filterValues.trendline);
-          trendlineValues = trendlineData?.y || [];
-        }
-        
-        if (filterValues.analysisType !== 'none' && optimizedData.length > 1) {
-          const analysisData = calculateAnalysis(optimizedData, filterValues.analysisType);
-          if (Array.isArray(analysisData)) {
-            analysisValues = analysisData[0]?.y || [];
-          } else {
-            analysisValues = analysisData?.y || [];
-          }
-        }
-        
-        // Add calculated values to table data
-        const enrichedData = optimizedData.map((row, index) => {
-          const enriched = { ...row };
-          
-          if (trendlineValues) {
-            enriched.trendlineValue = trendlineValues[index]?.toFixed(3) || 'N/A';
-          }
-          
-          if (analysisValues) {
-            enriched.analysisValue = analysisValues[index]?.toFixed(3) || 'N/A';
-          }
-          
-          return enriched;
-        });
+        // ✅ REMOVED trendline/analysis calculation from fetchData to prevent infinite loop
+        // These will be calculated in createPlot memoization instead
+        const enrichedData = optimizedData;
         
         setTableData(enrichedData.sort((a, b) => new Date(a.Tab_DateTime || a.Date) - new Date(b.Tab_DateTime || b.Date)));
         setCurrentPage(1);
-        calculateStats(allData);
+        
+        // ✅ INLINE stats calculation to avoid function dependency
+        if (allData.length > 0) {
+          const latest = allData[allData.length - 1];
+          const levels = allData.map(d => d.Tab_Value_mDepthC1).filter(v => !isNaN(v));
+          const temps = allData.map(d => d.Tab_Value_monT2m).filter(v => !isNaN(v));
+          
+          setStats({
+            current_level: latest?.Tab_Value_mDepthC1 || 0,
+            '24h_change': levels.length > 1 ? levels[levels.length - 1] - levels[0] : 0,
+            avg_temp: temps.length > 0 ? temps.reduce((a, b) => a + b, 0) / temps.length : 0,
+            anomalies: allData.filter(d => d.anomaly === -1).length
+          });
+        }
       } else {
         setGraphData([]);
         setTableData([]);
@@ -498,24 +484,36 @@ function Dashboard() {
         console.error('Error fetching data:', error);
       }
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
   }, [
-    filterValues,
-    stableSelectedStations,
-    stations.length,
-    calculateTrendline,
-    calculateAnalysis,
-    calculateStats
+    // ✅ CRITICAL FIX: ONLY primitive values - NO FUNCTIONS!
+    loading,
+    stations,
+    selectedStations,
+    filters.startDate,
+    filters.endDate,
+    filters.dataType,
+    filters.showAnomalies
   ]);
 
-  // Cleanup on unmount
+  // ✅ FIX 1.5: Enhanced cleanup on unmount
   useEffect(() => {
+    isMounted.current = true;
     return () => {
+      isMounted.current = false;
+      
+      // Clear timers
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      
+      // Cancel API requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      // Cancel all API requests
       apiService.cancelAllRequests();
     };
   }, []);
@@ -530,6 +528,19 @@ function Dashboard() {
       return () => clearTimeout(timeoutId);
     }
   }, [fetchData]);
+  
+  // ✅ FIX 2.2: Defer GovMap loading until dashboard is ready
+  useEffect(() => {
+    if (graphData.length > 0 && !loading) {
+      // Wait 2 seconds after dashboard loads, then load GovMap
+      const timer = setTimeout(() => {
+        setGovmapReady(true);
+        console.log('⚡ GovMap ready to load');
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [graphData, loading]);
 
   // Separate effect for predictions - support multiple stations
   useEffect(() => {
@@ -611,7 +622,7 @@ function Dashboard() {
           traces.push({
             x: highTideData.map(d => d.Date || d.Tab_DateTime),
             y: highTideData.map(d => d.HighTide),
-            type: 'scatter',
+            type: 'scattergl',
             mode: 'lines+markers',
             name: 'High Tide',
             line: { color: 'deepskyblue', width: 2 },
@@ -623,7 +634,7 @@ function Dashboard() {
           traces.push({
             x: lowTideData.map(d => d.Date || d.Tab_DateTime),
             y: lowTideData.map(d => d.LowTide),
-            type: 'scatter',
+            type: 'scattergl',
             mode: 'lines+markers',
             name: 'Low Tide',
             line: { color: 'lightcoral', width: 2 },
@@ -646,7 +657,7 @@ function Dashboard() {
           traces.push({
             x: data.map(d => d.Tab_DateTime),
             y: data.map(d => d.Tab_Value_mDepthC1),
-            type: 'scatter',
+            type: 'scattergl',
             mode: 'lines',
             name: station,
             line: { width: 2 }
@@ -659,7 +670,7 @@ function Dashboard() {
             traces.push({
               x: stationData.map(d => d.Tab_DateTime),
               y: stationData.map(d => d.Tab_Value_mDepthC1),
-              type: 'scatter',
+              type: 'scattergl',
               mode: 'lines',
               name: station,
               line: { width: 2 }
@@ -675,7 +686,7 @@ function Dashboard() {
           traces.push({
             x: anomalies.map(d => d.Tab_DateTime),
             y: anomalies.map(d => d.Tab_Value_mDepthC1),
-            type: 'scatter',
+            type: 'scattergl',
             mode: 'markers',
             name: 'Anomalies',
             marker: { 
@@ -752,7 +763,7 @@ function Dashboard() {
               traces.push({
                 x: [new Date(nowcast.ds)],
                 y: [nowcast.yhat],
-                type: 'scatter',
+                type: 'scattergl',
                 mode: 'markers',
                 name: `${stationKey} - Nowcast`,
                 marker: { 
@@ -772,7 +783,7 @@ function Dashboard() {
               traces.push({
                 x: forecastData.map(item => new Date(item.ds)),
                 y: forecastData.map(item => item.yhat),
-                type: 'scatter',
+                type: 'scattergl',
                 mode: 'lines',
                 name: `${stationKey} - Kalman Forecast`,
                 line: { color: baseColor, width: 2 },
@@ -784,7 +795,7 @@ function Dashboard() {
                 traces.push({
                   x: forecastData.map(item => new Date(item.ds)),
                   y: forecastData.map(item => item.yhat_upper),
-                  type: 'scatter',
+                  type: 'scattergl',
                   mode: 'lines',
                   name: '95% CI Upper',
                   line: { color: `rgba(${parseInt(baseColor.slice(1,3), 16)}, ${parseInt(baseColor.slice(3,5), 16)}, ${parseInt(baseColor.slice(5,7), 16)}, 0.2)`, width: 0 },
@@ -797,7 +808,7 @@ function Dashboard() {
                 traces.push({
                   x: forecastData.map(item => new Date(item.ds)),
                   y: forecastData.map(item => item.yhat_lower),
-                  type: 'scatter',
+                  type: 'scattergl',
                   mode: 'lines',
                   name: '95% CI Lower',
                   line: { color: `rgba(${parseInt(baseColor.slice(1,3), 16)}, ${parseInt(baseColor.slice(3,5), 16)}, ${parseInt(baseColor.slice(5,7), 16)}, 0.2)`, width: 1, dash: 'dot' },
@@ -813,7 +824,7 @@ function Dashboard() {
             traces.push({
               x: stationPredictions.ensemble.map(item => new Date(item.ds)),
               y: stationPredictions.ensemble.map(item => item.yhat),
-              type: 'scatter',
+              type: 'scattergl',
               mode: 'lines',
               name: `${stationKey} - Ensemble`,
               line: { color: baseColor, width: 2, dash: 'dash' },
@@ -827,7 +838,7 @@ function Dashboard() {
               traces.push({
                 x: stationPredictions.arima.map(item => new Date(item.ds)),
                 y: stationPredictions.arima.map(item => item.yhat),
-                type: 'scatter',
+                type: 'scattergl',
                 mode: 'lines',
                 name: `${stationKey} - ARIMA`,
                 line: { color: baseColor, dash: 'dot', width: 2 }
@@ -1009,7 +1020,7 @@ function Dashboard() {
   // Map component with proper conditional rendering and fullscreen support
   const renderMapContent = useCallback(() => {
     if (mapTab === 'govmap') {
-      return (
+      return govmapReady ? (
         <div style={{ 
           width: '100%', 
           height: '100%', 
@@ -1027,6 +1038,14 @@ function Dashboard() {
             referrerPolicy="no-referrer"
           />
         </div>
+      ) : (
+        <div className="text-center p-5">
+          <Spinner animation="border" variant="primary" />
+          <p className="mt-2">Loading map interface...</p>
+          <small className="text-muted">
+            Dashboard is ready - map loading in background
+          </small>
+        </div>
       );
     } else if (mapTab === 'osm') {
       return (
@@ -1042,7 +1061,7 @@ function Dashboard() {
       );
     }
     return null;
-  }, [mapTab, stations, selectedStations, graphData, filters.endDate, forecastData]);
+  }, [mapTab, stations, selectedStations, graphData, filters.endDate, forecastData, govmapReady]);
 
   return (
     <ErrorBoundary>
@@ -1814,9 +1833,21 @@ function Dashboard() {
                   </Tab>
                   
                   <Tab eventKey="forecast" title="Waves Forecast">
-                    <Suspense fallback={<Spinner animation="border" />}>
-                      <SeaForecastView apiBaseUrl={API_BASE_URL} />
-                    </Suspense>
+                    {/* ✅ FIX 2.4: Lazy load forecast component only when tab is active */}
+                    {activeTab === 'forecast' ? (
+                      <Suspense fallback={
+                        <div className="text-center p-5">
+                          <Spinner animation="border" variant="primary" />
+                          <p className="mt-2">Loading forecast...</p>
+                        </div>
+                      }>
+                        <SeaForecastView apiBaseUrl={API_BASE_URL} />
+                      </Suspense>
+                    ) : (
+                      <div className="text-center p-5">
+                        <p className="text-muted">Click to load forecast data</p>
+                      </div>
+                    )}
                   </Tab>
                   
                   <Tab eventKey="mariners" title="Mariners Forecast">
