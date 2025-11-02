@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Row, Col, Badge, Spinner, Button } from 'react-bootstrap';
 import { parseWaveHeight, parseWindInfo, getWaveRiskColor, getWindRiskColor } from '../utils/imsCodeTranslations';
 
@@ -7,13 +7,17 @@ const SeaForecastView = ({ apiBaseUrl }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // ✅ FIX 2.3: Stable API URL to prevent unnecessary re-renders
+  const stableApiUrl = useMemo(() => {
+    return apiBaseUrl || process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886';
+  }, [apiBaseUrl]);
+
   const fetchForecastData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-  const apiUrl = apiBaseUrl || process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886';
-  console.log('Fetching forecast from:', `${apiUrl}/api/sea-forecast`);
-  const response = await fetch(`${apiUrl}/api/sea-forecast`);
+      console.log('Fetching forecast from:', `${stableApiUrl}/api/sea-forecast`);
+      const response = await fetch(`${stableApiUrl}/api/sea-forecast`);
       if (response.ok) {
         const data = await response.json();
         console.log('Forecast data received:', data);
@@ -29,7 +33,7 @@ const SeaForecastView = ({ apiBaseUrl }) => {
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl]);
+  }, [stableApiUrl]); // ✅ Changed from [apiBaseUrl]
 
   useEffect(() => {
     fetchForecastData();
