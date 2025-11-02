@@ -32,11 +32,11 @@ echo ========================================
 echo   Frontend: http://localhost:30887
 echo   Backend:  http://5.102.231.16:30886
 echo   
-echo   Expected load time: 2-5 seconds
-echo   Bundle size: ~500KB (vs 61MB in dev)
+echo   Expected load time: 1-3 seconds
+echo   Bundle size: Optimized production build
 echo ========================================
 echo.
 
-call npm run start-external
+npx serve -s build -l 30887
 
 pause

@@ -56,6 +56,7 @@ function Dashboard() {
   
   // ✅ FIX 2.2 REVISED: Deferred GovMap loading
   const [govmapReady, setGovmapReady] = useState(false);
+  const [stationsFetched, setStationsFetched] = useState(false);
   
   // ✅ FIX 1.7: Fix resize handler leak - remove unstable dependency
   useEffect(() => {
@@ -108,31 +109,12 @@ function Dashboard() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-  // Fetch stations on mount with retry
+  
   useEffect(() => {
-    const initializeData = async () => {
-      // Try fetching stations up to 3 times
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await fetchStations();
-          break; // Success, exit retry loop
-        } catch (error) {
-          console.warn(`Station fetch attempt ${attempt} failed:`, error);
-          if (attempt === 3) {
-            console.error('All station fetch attempts failed, using fallback');
-          } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          }
-        }
-      }
-      
-      // ✅ FIX 2.1: Removed duplicate forecast call - SeaForecastView handles its own data
-    };
-    
-    initializeData();
-  }, []);
+    if (!stationsFetched) {
+      fetchStations().finally(() => setStationsFetched(true));
+    }
+  }, [stationsFetched]);
 
   const fetchStations = async () => {
     try {
@@ -1833,21 +1815,14 @@ function Dashboard() {
                   </Tab>
                   
                   <Tab eventKey="forecast" title="Waves Forecast">
-                    {/* ✅ FIX 2.4: Lazy load forecast component only when tab is active */}
-                    {activeTab === 'forecast' ? (
-                      <Suspense fallback={
-                        <div className="text-center p-5">
-                          <Spinner animation="border" variant="primary" />
-                          <p className="mt-2">Loading forecast...</p>
-                        </div>
-                      }>
-                        <SeaForecastView apiBaseUrl={API_BASE_URL} />
-                      </Suspense>
-                    ) : (
+                    <Suspense fallback={
                       <div className="text-center p-5">
-                        <p className="text-muted">Click to load forecast data</p>
+                        <Spinner animation="border" variant="primary" />
+                        <p className="mt-2">Loading forecast...</p>
                       </div>
-                    )}
+                    }>
+                      <SeaForecastView apiBaseUrl={API_BASE_URL} />
+                    </Suspense>
                   </Tab>
                   
                   <Tab eventKey="mariners" title="Mariners Forecast">
