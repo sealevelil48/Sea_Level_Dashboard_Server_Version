@@ -124,10 +124,15 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
           let mainTrace = {
             x: df.map(item => item.Tab_DateTime),
             y: df.map(item => item.Tab_Value_mDepthC1),
-            type: 'scattergl',
+            type: 'scatter',
             mode: 'lines',
             name: `Sea Level - ${filters.station}`,
-            line: { color: '#00bfff', width: 2 },
+            line: { 
+              color: '#00bfff', 
+              width: 2,
+              shape: 'spline',
+              smoothing: 1.3
+            },
             hovertemplate: '<b>%{x}</b><br>Level: %{y:.3f}m<extra></extra>'
           };
           traces.push(mainTrace);
@@ -209,10 +214,15 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
                       traces.push({
                         x: forecastData.map(item => new Date(item.ds)),
                         y: forecastData.map(item => item.yhat),
-                        type: 'scattergl',
+                        type: 'scatter',
                         mode: 'lines',
                         name: `${stationKey} - Kalman Forecast`,
-                        line: { color: baseColor, width: 2 },
+                        line: { 
+                          color: baseColor, 
+                          width: 2,
+                          shape: 'spline',
+                          smoothing: 1.3
+                        },
                         hovertemplate: `<b>${stationKey} Kalman</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
                       });
                       
@@ -250,10 +260,16 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
                     traces.push({
                       x: stationPredictions.ensemble.map(item => new Date(item.ds)),
                       y: stationPredictions.ensemble.map(item => item.yhat),
-                      type: 'scattergl',
+                      type: 'scatter',
                       mode: 'lines',
                       name: `${stationKey} - Ensemble`,
-                      line: { color: baseColor, width: 2, dash: 'dash' },
+                      line: { 
+                        color: baseColor, 
+                        width: 2, 
+                        dash: 'dash',
+                        shape: 'spline',
+                        smoothing: 1.3
+                      },
                       hovertemplate: `<b>${stationKey} Ensemble</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
                     });
                   }
@@ -263,10 +279,16 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
                     traces.push({
                       x: stationPredictions.arima.map(item => new Date(item.ds)),
                       y: stationPredictions.arima.map(item => item.yhat),
-                      type: 'scattergl',
+                      type: 'scatter',
                       mode: 'lines',
                       name: `${stationKey} - ARIMA`,
-                      line: { color: baseColor, width: 1.5, dash: 'dot' },
+                      line: { 
+                        color: baseColor, 
+                        width: 1.5, 
+                        dash: 'dot',
+                        shape: 'spline',
+                        smoothing: 1.3
+                      },
                       hovertemplate: `<b>${stationKey} ARIMA</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
                     });
                   }
@@ -276,10 +298,16 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
                     traces.push({
                       x: stationPredictions.prophet.map(item => new Date(item.ds)),
                       y: stationPredictions.prophet.map(item => item.yhat),
-                      type: 'scattergl',
+                      type: 'scatter',
                       mode: 'lines',
                       name: `${stationKey} - Prophet`,
-                      line: { color: baseColor, width: 1.5, dash: 'dashdot' },
+                      line: { 
+                        color: baseColor, 
+                        width: 1.5, 
+                        dash: 'dashdot',
+                        shape: 'spline',
+                        smoothing: 1.3
+                      },
                       hovertemplate: `<b>${stationKey} Prophet</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
                     });
                   }
@@ -336,10 +364,15 @@ const GraphView = ({ filters, apiBaseUrl, setStats }) => {
             traces.push({
               x: df.map(item => item.Tab_DateTime),
               y: rollingAvg,
-              type: 'scattergl',
+              type: 'scatter',
               mode: 'lines',
               name: `${filters.rollingAverage}-point Moving Average`,
-              line: { color: '#ffff00', width: 2 },
+              line: { 
+                color: '#ffff00', 
+                width: 2,
+                shape: 'spline',
+                smoothing: 1.3
+              },
               hovertemplate: '<b>Moving Avg</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>'
             });
           }
