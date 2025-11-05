@@ -1,0 +1,29 @@
+Batch Files Explained
+1. setup_govmap_domain.bat
+Purpose : Sets up local domain mapping for GovMap integration
+
+Adds sea-level-dash-local to your Windows hosts file
+
+Maps 127.0.0.1 to sea-level-dash-local
+
+Must run as Administrator (right-click ? "Run as administrator")
+
+Required for GovMap API to work properly with local development
+
+2. start_backend.bat
+Purpose : Starts the backend server with Redis caching
+
+Checks/starts Redis service for caching
+
+Starts FastAPI backend on sea-level-dash-local:8001
+
+Requires domain setup from step 1
+
+3. START_PRODUCTION.bat
+Purpose : Builds and serves optimized production version
+
+Builds minified frontend bundle
+
+Serves production build on port 30887
+
+Uses remote backend at 5.102.231.16:30886
