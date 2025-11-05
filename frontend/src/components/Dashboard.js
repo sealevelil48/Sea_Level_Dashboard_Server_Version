@@ -20,6 +20,14 @@ const MarinersForecastView = lazy(() => import('./MarinersForecastView'));
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:30886';
 
+// Helper function to format date for API without timezone issues
+const formatDateForAPI = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 function Dashboard() {
   const { measureOperation } = usePerformanceMonitor('Dashboard');
   // Suppress unused variable warning
@@ -315,10 +323,15 @@ function Dashboard() {
     return {
       x: data.map(d => d.Tab_DateTime),
       y: rollingAvg,
-      type: 'scattergl',
+      type: 'scatter',
       mode: 'lines',
       name: config.name,
-      line: { color: config.color, width: 2 }
+      line: { 
+        color: config.color, 
+        width: 2,
+        shape: 'spline',
+        smoothing: 1.3
+      }
     };
   }, []);
 
@@ -389,8 +402,8 @@ function Dashboard() {
         for (const station of stationList) {
           const params = {
             station: station,
-            start_date: new Date(filterValues.startDate).toISOString().split('T')[0],
-            end_date: new Date(filterValues.endDate).toISOString().split('T')[0],
+            start_date: formatDateForAPI(new Date(filterValues.startDate)),
+            end_date: formatDateForAPI(new Date(filterValues.endDate)),
             data_source: filterValues.dataType,
             show_anomalies: filterValues.showAnomalies.toString()
           };
@@ -408,8 +421,8 @@ function Dashboard() {
         for (const station of stableSelectedStations.filter(s => s !== 'All Stations').slice(0, 3)) {
           const params = {
             station: station,
-            start_date: new Date(filterValues.startDate).toISOString().split('T')[0],
-            end_date: new Date(filterValues.endDate).toISOString().split('T')[0],
+            start_date: formatDateForAPI(new Date(filterValues.startDate)),
+            end_date: formatDateForAPI(new Date(filterValues.endDate)),
             data_source: filterValues.dataType,
             show_anomalies: filterValues.showAnomalies.toString()
           };
@@ -639,10 +652,14 @@ function Dashboard() {
           traces.push({
             x: data.map(d => d.Tab_DateTime),
             y: data.map(d => d.Tab_Value_mDepthC1),
-            type: 'scattergl',
+            type: 'scatter',
             mode: 'lines',
             name: station,
-            line: { width: 2 }
+            line: { 
+              width: 2,
+              shape: 'spline',
+              smoothing: 1.3
+            }
           });
         });
       } else {
@@ -652,10 +669,14 @@ function Dashboard() {
             traces.push({
               x: stationData.map(d => d.Tab_DateTime),
               y: stationData.map(d => d.Tab_Value_mDepthC1),
-              type: 'scattergl',
+              type: 'scatter',
               mode: 'lines',
               name: station,
-              line: { width: 2 }
+              line: { 
+                width: 2,
+                shape: 'spline',
+                smoothing: 1.3
+              }
             });
           }
         });
@@ -765,10 +786,15 @@ function Dashboard() {
               traces.push({
                 x: forecastData.map(item => new Date(item.ds)),
                 y: forecastData.map(item => item.yhat),
-                type: 'scattergl',
+                type: 'scatter',
                 mode: 'lines',
                 name: `${stationKey} - Kalman Forecast`,
-                line: { color: baseColor, width: 2 },
+                line: { 
+                  color: baseColor, 
+                  width: 2,
+                  shape: 'spline',
+                  smoothing: 1.3
+                },
                 hovertemplate: `<b>${stationKey} Kalman</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
               });
               
@@ -806,10 +832,16 @@ function Dashboard() {
             traces.push({
               x: stationPredictions.ensemble.map(item => new Date(item.ds)),
               y: stationPredictions.ensemble.map(item => item.yhat),
-              type: 'scattergl',
+              type: 'scatter',
               mode: 'lines',
               name: `${stationKey} - Ensemble`,
-              line: { color: baseColor, width: 2, dash: 'dash' },
+              line: { 
+                color: baseColor, 
+                width: 2, 
+                dash: 'dash',
+                shape: 'spline',
+                smoothing: 1.3
+              },
               hovertemplate: `<b>${stationKey} Ensemble</b><br>%{x}<br>Level: %{y:.3f}m<extra></extra>`
             });
           }
@@ -820,10 +852,16 @@ function Dashboard() {
               traces.push({
                 x: stationPredictions.arima.map(item => new Date(item.ds)),
                 y: stationPredictions.arima.map(item => item.yhat),
-                type: 'scattergl',
+                type: 'scatter',
                 mode: 'lines',
                 name: `${stationKey} - ARIMA`,
-                line: { color: baseColor, dash: 'dot', width: 2 }
+                line: { 
+                  color: baseColor, 
+                  dash: 'dot', 
+                  width: 2,
+                  shape: 'spline',
+                  smoothing: 1.3
+                }
               });
             }
           }
