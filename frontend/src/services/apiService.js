@@ -114,9 +114,14 @@ class ApiService {
           throw new Error('Request cancelled');
         }
         
-        // Don't retry on client errors (4xx)
+        // Don't retry on client errors (4xx) - especially 404 for missing data
         if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
           this.activeRequests.delete(requestId);
+          // For 404 errors, return empty array instead of throwing to prevent infinite retries
+          if (error.status === 404 && (endpoint.includes('/api/data') || endpoint.includes('station='))) {
+            console.warn(`No data available for request: ${endpoint}`);
+            return [];
+          }
           throw error;
         }
         
@@ -159,6 +164,11 @@ class ApiService {
       const data = await this.request(`/api/data?${queryParams}`);
       return Array.isArray(data) ? data : [];
     } catch (error) {
+      // Handle 404 errors gracefully - station may not have data for the requested period
+      if (error instanceof ApiError && error.status === 404) {
+        console.warn(`No data available for station ${params.station} in the requested period`);
+        return [];
+      }
       console.error('Error fetching data:', error);
       return [];
     }

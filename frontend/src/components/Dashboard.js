@@ -410,8 +410,10 @@ function Dashboard() {
 
           try {
             const data = await apiService.getData(params);
-            if (Array.isArray(data)) {
+            if (Array.isArray(data) && data.length > 0) {
               allData = allData.concat(data);
+            } else if (data.length === 0) {
+              console.info(`No data available for ${station} in the selected period`);
             }
           } catch (err) {
             console.error(`Error fetching data for ${station}:`, err);
@@ -429,8 +431,10 @@ function Dashboard() {
 
           try {
             const data = await apiService.getData(params);
-            if (Array.isArray(data)) {
+            if (Array.isArray(data) && data.length > 0) {
               allData = allData.concat(data);
+            } else if (data.length === 0) {
+              console.info(`No data available for ${station} in the selected period`);
             }
           } catch (err) {
             console.error(`Error fetching data for ${station}:`, err);
