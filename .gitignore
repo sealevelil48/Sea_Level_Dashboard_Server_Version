@@ -118,6 +118,8 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
+nul
+*/nul
 
 # Temporary files
 *.tmp
