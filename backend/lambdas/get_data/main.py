@@ -17,9 +17,9 @@ try:
     from shared.database import engine, M, L, S, db_manager
     from sqlalchemy import text
     DATABASE_AVAILABLE = True
-    print("✅ Database modules imported successfully for get_data")
+    print("[OK] Database modules imported successfully for get_data")
 except ImportError as e:
-    print(f"❌ Database import error in get_data: {e}")
+    print(f"[ERROR] Database import error in get_data: {e}")
     DATABASE_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
@@ -82,7 +82,8 @@ def calculate_aggregation_level(start_date, end_date):
             return 'daily', '1 day'
         else:
             return 'weekly', '1 week'
-    except:
+    except Exception as e:
+        logger.warning(f"Date calculation error: {e}")
         return 'raw', None
 
 def detect_anomalies(df):
@@ -109,7 +110,7 @@ def detect_anomalies(df):
             
             anomaly_count = sum(df['anomaly'] == -1)
             if anomaly_count > 0:
-                logger.info(f"🔍 Detected {anomaly_count} anomalies")
+                logger.info(f"[ANOMALY] Detected {anomaly_count} anomalies")
     except Exception as e:
         logger.error(f"Error detecting anomalies: {e}")
         df['anomaly'] = 0
@@ -128,7 +129,7 @@ def load_data_from_db_optimized(start_date=None, end_date=None, station=None,
     
     agg_level, time_bucket = calculate_aggregation_level(parsed_start_date, parsed_end_date)
     
-    logger.info(f"📊 Using aggregation level: {agg_level} for date range {parsed_start_date} to {parsed_end_date}")
+    logger.info(f"[AGG] Using aggregation level: {agg_level} for date range {parsed_start_date} to {parsed_end_date}")
     
     cache_params = {
         'start_date': parsed_start_date,
@@ -144,105 +145,92 @@ def load_data_from_db_optimized(start_date=None, end_date=None, station=None,
     if db_manager and hasattr(db_manager, 'get_from_cache'):
         cached_data = db_manager.get_from_cache(cache_key)
         if cached_data:
-            logger.info(f"✅ Cache HIT: {len(cached_data)} rows (agg: {agg_level})")
+            logger.info(f"[CACHE HIT] {len(cached_data)} rows (agg: {agg_level})")
             return pd.DataFrame(cached_data)
     
-    try:
-        params = {}
+    params = {}
+    
+    # ============================================
+    # TIDES DATA QUERY (FIXED)
+    # ============================================
+    if data_source == 'tides':
+        if agg_level == 'raw':
+            sql_query = '''
+                SELECT "Date", "Station", "HighTide", "HighTideTime", "HighTideTemp", 
+                       "LowTide", "LowTideTime", "LowTideTemp", "MeasurementCount"
+                FROM "SeaTides"
+                WHERE 1=1
+            '''
+        else:
+            # Determine the period based on agg_level
+            period = 'day' if agg_level == 'daily' else ('week' if agg_level == 'weekly' else 'day')
+            sql_query = f'''
+                SELECT 
+                    DATE_TRUNC('{period}', "Date") as "Date",
+                    "Station",
+                    AVG("HighTide") as "HighTide",
+                    NULL as "HighTideTime",
+                    AVG("HighTideTemp") as "HighTideTemp",
+                    AVG("LowTide") as "LowTide",
+                    NULL as "LowTideTime",
+                    AVG("LowTideTemp") as "LowTideTemp",
+                    SUM("MeasurementCount") as "MeasurementCount"
+                FROM "SeaTides"
+                WHERE 1=1
+            '''
         
-        # ============================================
-        # TIDES DATA QUERY (FIXED)
-        # ============================================
-        if data_source == 'tides':
-            if agg_level == 'raw':
+        if station and station != 'All Stations':
+            sql_query += ' AND "Station" = :station'
+            params['station'] = station
+        
+        # FIXED: Use date comparison with explicit casting
+        if parsed_start_date:
+            sql_query += ' AND "Date" >= :start_date'
+            params['start_date'] = parsed_start_date
+        if parsed_end_date:
+            sql_query += ' AND "Date" <= :end_date'
+            params['end_date'] = parsed_end_date
+        
+        if agg_level != 'raw':
+            sql_query += ' GROUP BY DATE_TRUNC(\'week\', "Date"), "Station"'
+        
+        sql_query += ' ORDER BY "Date" ASC'
+    
+    # ============================================
+    # SEA LEVEL DATA QUERY (FIXED)
+    # ============================================
+    else:
+        if agg_level == 'raw':
+            sql_query = '''
+                SELECT 
+                    m."Tab_DateTime", 
+                    l."Station", 
+                    CAST(m."Tab_Value_mDepthC1" AS FLOAT) as "Tab_Value_mDepthC1",
+                    CAST(m."Tab_Value_monT2m" AS FLOAT) as "Tab_Value_monT2m"
+                FROM "Monitors_info2" m
+                JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                WHERE 1=1
+            '''
+        elif agg_level == 'hourly':
+            if time_bucket == '1 hour':
                 sql_query = '''
-                    SELECT "Date", "Station", "HighTide", "HighTideTime", "HighTideTemp", 
-                           "LowTide", "LowTideTime", "LowTideTemp", "MeasurementCount"
-                    FROM "SeaTides"
+                    SELECT 
+                        DATE_TRUNC('hour', m."Tab_DateTime")::timestamp as "Tab_DateTime",
+                        l."Station",
+                        AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
+                        AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
+                        MIN(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Min_mDepthC1",
+                        MAX(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Max_mDepthC1",
+                        COUNT(*) as "RecordCount"
+                    FROM "Monitors_info2" m
+                    JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
                     WHERE 1=1
                 '''
             else:
                 sql_query = '''
                     SELECT 
-                        DATE_TRUNC('week', "Date") as "Date",
-                        "Station",
-                        AVG("HighTide") as "HighTide",
-                        NULL as "HighTideTime",
-                        AVG("HighTideTemp") as "HighTideTemp",
-                        AVG("LowTide") as "LowTide",
-                        NULL as "LowTideTime",
-                        AVG("LowTideTemp") as "LowTideTemp",
-                        SUM("MeasurementCount") as "MeasurementCount"
-                    FROM "SeaTides"
-                    WHERE 1=1
-                '''
-            
-            if station and station != 'All Stations':
-                sql_query += ' AND "Station" = :station'
-                params['station'] = station
-            
-            # FIXED: Use date comparison with explicit casting
-            if parsed_start_date:
-                sql_query += ' AND "Date" >= :start_date'
-                params['start_date'] = parsed_start_date
-            if parsed_end_date:
-                sql_query += ' AND "Date" <= :end_date'
-                params['end_date'] = parsed_end_date
-            
-            if agg_level != 'raw':
-                sql_query += ' GROUP BY DATE_TRUNC(\'week\', "Date"), "Station"'
-            
-            sql_query += ' ORDER BY "Date" ASC'
-        
-        # ============================================
-        # SEA LEVEL DATA QUERY (FIXED)
-        # ============================================
-        else:
-            if agg_level == 'raw':
-                sql_query = '''
-                    SELECT 
-                        m."Tab_DateTime", 
-                        l."Station", 
-                        CAST(m."Tab_Value_mDepthC1" AS FLOAT) as "Tab_Value_mDepthC1",
-                        CAST(m."Tab_Value_monT2m" AS FLOAT) as "Tab_Value_monT2m"
-                    FROM "Monitors_info2" m
-                    JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
-                    WHERE 1=1
-                '''
-            elif agg_level == 'hourly':
-                if time_bucket == '1 hour':
-                    sql_query = '''
-                        SELECT 
-                            DATE_TRUNC('hour', m."Tab_DateTime")::timestamp as "Tab_DateTime",
-                            l."Station",
-                            AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
-                            AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
-                            MIN(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Min_mDepthC1",
-                            MAX(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Max_mDepthC1",
-                            COUNT(*) as "RecordCount"
-                        FROM "Monitors_info2" m
-                        JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
-                        WHERE 1=1
-                    '''
-                else:
-                    sql_query = '''
-                        SELECT 
-                            (DATE_TRUNC('hour', m."Tab_DateTime") + 
-                            INTERVAL '3 hours' * FLOOR(EXTRACT(HOUR FROM m."Tab_DateTime")::int / 3))::timestamp as "Tab_DateTime",
-                            l."Station",
-                            AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
-                            AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
-                            MIN(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Min_mDepthC1",
-                            MAX(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Max_mDepthC1",
-                            COUNT(*) as "RecordCount"
-                        FROM "Monitors_info2" m
-                        JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
-                        WHERE 1=1
-                    '''
-            elif agg_level == 'daily':
-                sql_query = '''
-                    SELECT 
-                        DATE_TRUNC('day', m."Tab_DateTime")::timestamp as "Tab_DateTime",
+                        (DATE_TRUNC('hour', m."Tab_DateTime") + 
+                        INTERVAL '3 hours' * FLOOR(EXTRACT(HOUR FROM m."Tab_DateTime")::int / 3))::timestamp as "Tab_DateTime",
                         l."Station",
                         AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
                         AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
@@ -253,48 +241,63 @@ def load_data_from_db_optimized(start_date=None, end_date=None, station=None,
                     JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
                     WHERE 1=1
                 '''
-            else:  # weekly
-                sql_query = '''
-                    SELECT 
-                        DATE_TRUNC('week', m."Tab_DateTime")::timestamp as "Tab_DateTime",
-                        l."Station",
-                        AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
-                        AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
-                        MIN(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Min_mDepthC1",
-                        MAX(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Max_mDepthC1",
-                        COUNT(*) as "RecordCount"
-                    FROM "Monitors_info2" m
-                    JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
-                    WHERE 1=1
-                '''
-            
-            if station and station != 'All Stations':
-                sql_query += ' AND l."Station" = :station'
-                params['station'] = station
-            
-            # FIXED: Use DATE() function for date-only comparison (timezone-agnostic)
-            if parsed_start_date:
-                sql_query += ' AND DATE(m."Tab_DateTime") >= :start_date'
-                params['start_date'] = parsed_start_date
-            if parsed_end_date:
-                sql_query += ' AND DATE(m."Tab_DateTime") <= :end_date'
-                params['end_date'] = parsed_end_date
-            
-            # Add GROUP BY for aggregations
-            if agg_level == 'hourly' and time_bucket == '3 hours':
-                sql_query += ''' GROUP BY DATE_TRUNC('hour', m."Tab_DateTime") + 
-                    INTERVAL '3 hours' * FLOOR(EXTRACT(HOUR FROM m."Tab_DateTime")::int / 3), l."Station"'''
-            elif agg_level in ['hourly', 'daily', 'weekly']:
-                period = 'hour' if agg_level == 'hourly' else ('day' if agg_level == 'daily' else 'week')
-                sql_query += f' GROUP BY DATE_TRUNC(\'{period}\', m."Tab_DateTime"), l."Station"'
-            
-            sql_query += ' ORDER BY "Tab_DateTime" ASC'
+        elif agg_level == 'daily':
+            sql_query = '''
+                SELECT 
+                    DATE_TRUNC('day', m."Tab_DateTime")::timestamp as "Tab_DateTime",
+                    l."Station",
+                    AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
+                    AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
+                    MIN(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Min_mDepthC1",
+                    MAX(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Max_mDepthC1",
+                    COUNT(*) as "RecordCount"
+                FROM "Monitors_info2" m
+                JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                WHERE 1=1
+            '''
+        else:  # weekly
+            sql_query = '''
+                SELECT 
+                    DATE_TRUNC('week', m."Tab_DateTime")::timestamp as "Tab_DateTime",
+                    l."Station",
+                    AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
+                    AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
+                    MIN(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Min_mDepthC1",
+                    MAX(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Max_mDepthC1",
+                    COUNT(*) as "RecordCount"
+                FROM "Monitors_info2" m
+                JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                WHERE 1=1
+            '''
         
-        logger.info(f"🔍 Executing {agg_level} query")
+        if station and station != 'All Stations':
+            sql_query += ' AND l."Station" = :station'
+            params['station'] = station
         
-        # ============================================
-        # EXECUTE QUERY
-        # ============================================
+        # FIXED: Use DATE() function for date-only comparison (timezone-agnostic)
+        if parsed_start_date:
+            sql_query += ' AND DATE(m."Tab_DateTime") >= :start_date'
+            params['start_date'] = parsed_start_date
+        if parsed_end_date:
+            sql_query += ' AND DATE(m."Tab_DateTime") <= :end_date'
+            params['end_date'] = parsed_end_date
+        
+        # Add GROUP BY for aggregations
+        if agg_level == 'hourly' and time_bucket == '3 hours':
+            sql_query += ''' GROUP BY DATE_TRUNC('hour', m."Tab_DateTime") + 
+                INTERVAL '3 hours' * FLOOR(EXTRACT(HOUR FROM m."Tab_DateTime")::int / 3), l."Station"'''
+        elif agg_level in ['hourly', 'daily', 'weekly']:
+            period = 'hour' if agg_level == 'hourly' else ('day' if agg_level == 'daily' else 'week')
+            sql_query += f' GROUP BY DATE_TRUNC(\'{period}\', m."Tab_DateTime"), l."Station"'
+        
+        sql_query += ' ORDER BY "Tab_DateTime" ASC'
+    
+    logger.info(f"[QUERY] Executing {agg_level} query")
+    
+    # ============================================
+    # EXECUTE QUERY
+    # ============================================
+    try:
         with engine.connect() as connection:
             result = connection.execute(text(sql_query), params)
             df = pd.DataFrame(result.fetchall())
@@ -314,17 +317,282 @@ def load_data_from_db_optimized(start_date=None, end_date=None, station=None,
                     try:
                         cache_data = df.to_dict('records')
                         db_manager.set_cache(cache_key, cache_data, ttl=cache_ttl)
-                        logger.info(f"📦 Cached {len(df)} rows (agg: {agg_level}, TTL: {cache_ttl}s)")
-                    except Exception as e:
-                        logger.warning(f"Cache failed: {e}")
+                        logger.info(f"[CACHE SET] Cached {len(df)} rows (agg: {agg_level}, TTL: {cache_ttl}s)")
+                    except Exception as cache_error:
+                        logger.warning(f"Cache operation failed: {cache_error}")
             
             return df
             
     except Exception as e:
-        logger.error(f"❌ Database error: {e}")
+        logger.error(f"[DB ERROR] Database query failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return pd.DataFrame()
+
+def load_data_batch_optimized(stations_list, start_date=None, end_date=None,
+                              data_source='default', show_anomalies=False):
+    """
+    Optimized batch data loading for multiple stations in a single query
+    """
+    if not DATABASE_AVAILABLE or not engine:
+        logger.warning("Database not available")
+        return pd.DataFrame()
+
+    if not stations_list or len(stations_list) == 0:
+        return pd.DataFrame()
+
+    # Remove 'All Stations' if present
+    stations_list = [s for s in stations_list if s != 'All Stations']
+    if not stations_list:
+        return pd.DataFrame()
+
+    parsed_start_date = parse_date_parameter(start_date)
+    parsed_end_date = parse_date_parameter(end_date)
+
+    agg_level, time_bucket = calculate_aggregation_level(parsed_start_date, parsed_end_date)
+
+    logger.info(f"[BATCH] Loading data for {len(stations_list)} stations with {agg_level} aggregation")
+
+    # Build query based on aggregation level (same logic as single station)
+    params = {
+        'start_date': parsed_start_date,
+        'end_date': parsed_end_date
+    }
+
+    if data_source == 'tides':
+        # Tides batch query
+        if agg_level == 'raw':
+            sql_query = '''
+                SELECT "Date", "Station", "HighTide", "HighTideTime", "HighTideTemp",
+                       "LowTide", "LowTideTime", "LowTideTemp", "MeasurementCount"
+                FROM "SeaTides"
+                WHERE "Station" = ANY(:stations)
+            '''
+        else:
+            period = 'day' if agg_level == 'daily' else ('week' if agg_level == 'weekly' else 'day')
+            sql_query = f'''
+                SELECT
+                    DATE_TRUNC('{period}', "Date") as "Date",
+                    "Station",
+                    AVG("HighTide") as "HighTide",
+                    NULL as "HighTideTime",
+                    AVG("HighTideTemp") as "HighTideTemp",
+                    AVG("LowTide") as "LowTide",
+                    NULL as "LowTideTime",
+                    AVG("LowTideTemp") as "LowTideTemp",
+                    SUM("MeasurementCount") as "MeasurementCount"
+                FROM "SeaTides"
+                WHERE "Station" = ANY(:stations)
+            '''
+
+        params['stations'] = stations_list
+
+        if parsed_start_date:
+            sql_query += ' AND "Date" >= :start_date'
+        if parsed_end_date:
+            sql_query += ' AND "Date" <= :end_date'
+
+        if agg_level != 'raw':
+            sql_query += f' GROUP BY DATE_TRUNC(\'{period}\', "Date"), "Station"'
+
+        sql_query += ' ORDER BY "Date" ASC'
+    else:
+        # Sea level batch query
+        if agg_level == 'raw':
+            sql_query = '''
+                SELECT
+                    m."Tab_DateTime",
+                    l."Station",
+                    CAST(m."Tab_Value_mDepthC1" AS FLOAT) as "Tab_Value_mDepthC1",
+                    CAST(m."Tab_Value_monT2m" AS FLOAT) as "Tab_Value_monT2m"
+                FROM "Monitors_info2" m
+                JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                WHERE l."Station" = ANY(:stations)
+            '''
+        elif agg_level == 'hourly':
+            time_trunc = '1 hour' if time_bucket == '1 hour' else '3 hours'
+            if time_bucket == '1 hour':
+                sql_query = '''
+                    SELECT
+                        DATE_TRUNC('hour', m."Tab_DateTime")::timestamp as "Tab_DateTime",
+                        l."Station",
+                        AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
+                        AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
+                        COUNT(*) as "RecordCount"
+                    FROM "Monitors_info2" m
+                    JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                    WHERE l."Station" = ANY(:stations)
+                '''
+            else:
+                sql_query = '''
+                    SELECT
+                        (DATE_TRUNC('hour', m."Tab_DateTime") +
+                        INTERVAL '3 hours' * FLOOR(EXTRACT(HOUR FROM m."Tab_DateTime")::int / 3))::timestamp as "Tab_DateTime",
+                        l."Station",
+                        AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
+                        AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
+                        COUNT(*) as "RecordCount"
+                    FROM "Monitors_info2" m
+                    JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                    WHERE l."Station" = ANY(:stations)
+                '''
+        elif agg_level == 'daily':
+            sql_query = '''
+                SELECT
+                    DATE_TRUNC('day', m."Tab_DateTime")::timestamp as "Tab_DateTime",
+                    l."Station",
+                    AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
+                    AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
+                    COUNT(*) as "RecordCount"
+                FROM "Monitors_info2" m
+                JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                WHERE l."Station" = ANY(:stations)
+            '''
+        else:  # weekly
+            sql_query = '''
+                SELECT
+                    DATE_TRUNC('week', m."Tab_DateTime")::timestamp as "Tab_DateTime",
+                    l."Station",
+                    AVG(CAST(m."Tab_Value_mDepthC1" AS FLOAT)) as "Tab_Value_mDepthC1",
+                    AVG(CAST(m."Tab_Value_monT2m" AS FLOAT)) as "Tab_Value_monT2m",
+                    COUNT(*) as "RecordCount"
+                FROM "Monitors_info2" m
+                JOIN "Locations" l ON m."Tab_TabularTag" = l."Tab_TabularTag"
+                WHERE l."Station" = ANY(:stations)
+            '''
+
+        params['stations'] = stations_list
+
+        if parsed_start_date:
+            sql_query += ' AND DATE(m."Tab_DateTime") >= :start_date'
+        if parsed_end_date:
+            sql_query += ' AND DATE(m."Tab_DateTime") <= :end_date'
+
+        if agg_level in ['hourly', 'daily', 'weekly']:
+            if agg_level == 'hourly' and time_bucket == '3 hours':
+                sql_query += ''' GROUP BY DATE_TRUNC('hour', m."Tab_DateTime") +
+                    INTERVAL '3 hours' * FLOOR(EXTRACT(HOUR FROM m."Tab_DateTime")::int / 3), l."Station"'''
+            else:
+                period = 'hour' if agg_level == 'hourly' else ('day' if agg_level == 'daily' else 'week')
+                sql_query += f' GROUP BY DATE_TRUNC(\'{period}\', m."Tab_DateTime"), l."Station"'
+
+        sql_query += ' ORDER BY "Tab_DateTime" ASC'
+
+    logger.info(f"[BATCH QUERY] Executing for {len(stations_list)} stations")
+
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text(sql_query), params)
+            df = pd.DataFrame(result.fetchall())
+
+            if not df.empty:
+                df.columns = result.keys()
+                df = clean_numeric_data(df)
+
+                if agg_level == 'raw' and show_anomalies:
+                    df = detect_anomalies(df)
+                else:
+                    df['anomaly'] = 0
+
+                df['aggregation_level'] = agg_level
+
+            logger.info(f"[BATCH] Loaded {len(df)} records for {len(stations_list)} stations")
+            return df
+
+    except Exception as e:
+        logger.error(f"[BATCH ERROR] Database query failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return pd.DataFrame()
+
+def lambda_handler_batch(event, context):
+    """Lambda handler for batch data requests (multiple stations)"""
+    try:
+        params = event.get('queryStringParameters') or {}
+
+        # Get stations list (comma-separated or array)
+        stations_param = params.get('stations', '')
+        if isinstance(stations_param, str):
+            stations_list = [s.strip() for s in stations_param.split(',') if s.strip()]
+        else:
+            stations_list = stations_param
+
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
+        data_source = params.get('data_source', 'default')
+        show_anomalies = params.get('show_anomalies', 'false').lower() == 'true'
+
+        logger.info(f"[BATCH REQUEST] Stations: {stations_list}, range={start_date} to {end_date}")
+
+        df = load_data_batch_optimized(
+            stations_list=stations_list,
+            start_date=start_date,
+            end_date=end_date,
+            data_source=data_source,
+            show_anomalies=show_anomalies
+        )
+
+        if df.empty:
+            return {
+                "statusCode": 404,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                },
+                "body": json.dumps({"message": "No data found"})
+            }
+
+        agg_level = df['aggregation_level'].iloc[0] if 'aggregation_level' in df.columns else 'raw'
+
+        if 'aggregation_level' in df.columns:
+            df = df.drop(columns=['aggregation_level'])
+
+        df_json = df.copy()
+
+        # Format datetime columns
+        for col in df_json.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_json[col]):
+                if data_source == 'tides' and col == 'Date':
+                    df_json[col] = df_json[col].dt.strftime('%d/%m/%Y')
+                elif col in ['HighTideTime', 'LowTideTime'] or (col.endswith('Time') and col != 'Tab_DateTime'):
+                    df_json[col] = df_json[col].dt.strftime('%H:%M')
+                else:
+                    df_json[col] = df_json[col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        numeric_cols = df_json.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            df_json[col] = df_json[col].replace([np.inf, -np.inf], np.nan).fillna(0)
+
+        response_data = df_json.to_dict('records')
+
+        logger.info(f"[BATCH RESPONSE] Returning {len(response_data)} records for {len(stations_list)} stations (agg: {agg_level})")
+
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "X-Aggregation-Level": agg_level,
+                "X-Record-Count": str(len(response_data)),
+                "X-Stations-Count": str(len(stations_list))
+            },
+            "body": json.dumps(response_data, default=str)
+        }
+
+    except Exception as e:
+        logger.error(f"[BATCH ERROR] Error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({"error": str(e)})
+        }
 
 def lambda_handler(event, context):
     """Lambda handler with optimized data loading"""
@@ -335,9 +603,9 @@ def lambda_handler(event, context):
         end_date = params.get('end_date')
         data_source = params.get('data_source', 'default')
         show_anomalies = params.get('show_anomalies', 'false').lower() == 'true'
-        
-        logger.info(f"📊 Data request: station={station}, range={start_date} to {end_date}")
-        
+
+        logger.info(f"[REQUEST] Data request: station={station}, range={start_date} to {end_date}")
+
         df = load_data_from_db_optimized(
             start_date=start_date,
             end_date=end_date,
@@ -345,7 +613,7 @@ def lambda_handler(event, context):
             data_source=data_source,
             show_anomalies=show_anomalies
         )
-        
+
         if df.empty:
             return {
                 "statusCode": 404,
@@ -355,14 +623,14 @@ def lambda_handler(event, context):
                 },
                 "body": json.dumps({"message": "No data found"})
             }
-        
+
         agg_level = df['aggregation_level'].iloc[0] if 'aggregation_level' in df.columns else 'raw'
-        
+
         if 'aggregation_level' in df.columns:
             df = df.drop(columns=['aggregation_level'])
-        
+
         df_json = df.copy()
-        
+
         # FIXED: Proper datetime formatting that doesn't break Tab_DateTime
         for col in df_json.columns:
             if pd.api.types.is_datetime64_any_dtype(df_json[col]):
@@ -375,18 +643,18 @@ def lambda_handler(event, context):
                 else:
                     # Format all other datetime columns (including Tab_DateTime) as full ISO format
                     df_json[col] = df_json[col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
+
         numeric_cols = df_json.select_dtypes(include=[np.number]).columns
         for col in numeric_cols:
             df_json[col] = df_json[col].replace([np.inf, -np.inf], np.nan).fillna(0)
-        
+
         response_data = df_json.to_dict('records')
-        
+
         if response_data:
             first_date = response_data[0].get('Tab_DateTime') or response_data[0].get('Date', 'N/A')
             last_date = response_data[-1].get('Tab_DateTime') or response_data[-1].get('Date', 'N/A')
-            logger.info(f"✅ Returning {len(response_data)} records (agg: {agg_level}) from {first_date} to {last_date}")
-        
+            logger.info(f"[RESPONSE] Returning {len(response_data)} records (agg: {agg_level}) from {first_date} to {last_date}")
+
         return {
             "statusCode": 200,
             "headers": {
@@ -399,9 +667,9 @@ def lambda_handler(event, context):
             },
             "body": json.dumps(response_data, default=str)
         }
-        
+
     except Exception as e:
-        logger.error(f"❌ Error: {e}")
+        logger.error(f"[ERROR] Error: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return {

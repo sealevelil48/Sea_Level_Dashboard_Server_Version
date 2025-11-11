@@ -12,9 +12,9 @@ try:
     from shared.database import engine, L, db_manager
     from sqlalchemy import select, text
     DATABASE_AVAILABLE = True
-    print("✅ Database modules imported successfully for get_stations")
+    print("[OK] Database modules imported successfully for get_stations")
 except ImportError as e:
-    print(f"❌ Database import error in get_stations: {e}")
+    print(f"[ERROR] Database import error in get_stations: {e}")
     DATABASE_AVAILABLE = False
     engine = L = db_manager = None
 

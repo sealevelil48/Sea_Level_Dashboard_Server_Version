@@ -78,6 +78,20 @@ except ImportError as e:
         logger.info("[OK] Optimized database manager imported successfully")
     except ImportError:
         db_manager = None
+
+# Import baseline integration
+try:
+    from shared.baseline_integration import (
+        get_outliers_api,
+        get_corrections_api,
+        BaselineIntegratedProcessor
+    )
+    from shared.data_processing import load_data_from_db
+    BASELINE_API_AVAILABLE = True
+    logger.info("[OK] Baseline integration API imported successfully")
+except ImportError as e:
+    logger.warning(f"[WARN] Baseline integration API not available: {e}")
+    BASELINE_API_AVAILABLE = False
     
 try:
     from lambdas.get_stations.main import lambda_handler as get_stations_handler
@@ -373,7 +387,7 @@ async def get_data(
     try:
         # Add performance monitoring
         start_time = time.time()
-        
+
         event = {
             "httpMethod": "GET",
             "path": "/data",
@@ -386,25 +400,73 @@ async def get_data(
             }
         }
         response = get_data_handler(event, None)
-        
+
         # Add performance headers
         duration = (time.time() - start_time) * 1000
         result = lambda_to_fastapi_response(response)
-        
+
         # Add cache and performance headers
         if hasattr(result, 'headers'):
             result.headers['X-Response-Time'] = f"{duration:.0f}ms"
             result.headers['Cache-Control'] = 'public, max-age=120'
-            
+
             # Determine cache status from logs
             if duration < 200:  # Fast response likely from cache
                 result.headers['X-Cache'] = 'HIT'
             else:
                 result.headers['X-Cache'] = 'MISS'
-        
+
         return result
     except Exception as e:
         logger.error(f"Error in get_data: {e}")
+        return JSONResponse(
+            content={"error": str(e), "data": []},
+            status_code=500
+        )
+
+@app.get("/api/data/batch")
+async def get_data_batch(
+    stations: str = "",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    data_source: str = "default",
+    show_anomalies: bool = False
+):
+    """Get historical data for multiple stations in a single query (batch endpoint)"""
+    try:
+        from lambdas.get_data.main import lambda_handler_batch
+
+        # Add performance monitoring
+        start_time = time.time()
+
+        event = {
+            "httpMethod": "GET",
+            "path": "/data/batch",
+            "queryStringParameters": {
+                "stations": stations,
+                "start_date": start_date,
+                "end_date": end_date,
+                "data_source": data_source,
+                "show_anomalies": str(show_anomalies).lower()
+            }
+        }
+        response = lambda_handler_batch(event, None)
+
+        # Add performance headers
+        duration = (time.time() - start_time) * 1000
+        result = lambda_to_fastapi_response(response)
+
+        # Add cache and performance headers
+        if hasattr(result, 'headers'):
+            result.headers['X-Response-Time'] = f"{duration:.0f}ms"
+            result.headers['Cache-Control'] = 'public, max-age=120'
+
+        logger.info(f"[BATCH] Completed batch request for stations: {stations} in {duration:.0f}ms")
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_data_batch: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JSONResponse(
             content={"error": str(e), "data": []},
             status_code=500
@@ -634,6 +696,222 @@ async def mariners_forecast_options():
 async def mariners_forecast_head():
     """Handle HEAD requests for mariners forecast"""
     return JSONResponse(content={}, headers={"Content-Type": "application/json"})
+
+@app.get("/api/outliers")
+async def get_outliers(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    station: str = "All Stations"
+):
+    """Get outlier detection results with Enhanced Southern Baseline Rules"""
+    if not BASELINE_API_AVAILABLE:
+        return JSONResponse(
+            content={"error": "Baseline rules not available"},
+            status_code=503
+        )
+    
+    try:
+        logger.info(f"Enhanced outliers request: start_date={start_date}, end_date={end_date}, station={station}")
+        
+        # Special handling for Ashkelon - use broader time range due to data sync issues
+        if station == "Ashkelon":
+            logger.info("Ashkelon requested - using broader time range for better data coverage")
+        
+        # Load data with reasonable limits to prevent performance issues
+        df = load_data_from_db(start_date, end_date, "All Stations")
+        
+        if df is None or df.empty:
+            logger.warning(f"No data found for outliers query")
+            return JSONResponse(
+                content={
+                    "error": "No data found",
+                    "message": "No data available for the specified parameters",
+                    "total_records": 0,
+                    "outliers_detected": 0,
+                    "outlier_percentage": 0,
+                    "validation": {
+                        "total_validations": 0,
+                        "total_exclusions": 0,
+                        "exclusion_rate": 0,
+                        "outliers_detected": 0,
+                        "baseline_calculations": 0
+                    },
+                    "outliers": []
+                }, 
+                status_code=200
+            )
+        
+        # Limit data size for performance
+        if len(df) > 5000:
+            logger.warning(f"Large dataset ({len(df)} records), limiting to most recent 5000 records")
+            df = df.sort_values('Tab_DateTime').tail(5000)
+        
+        logger.info(f"Processing {len(df)} records for enhanced outlier detection")
+        
+        # Get outliers with enhanced validation statistics
+        import signal
+        import time
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Outlier processing timeout")
+        
+        # Set timeout for processing (30 seconds)
+        if hasattr(signal, 'SIGALRM'):  # Unix only
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(30)
+        
+        start_time = time.time()
+        result = get_outliers_api(df)
+        processing_time = time.time() - start_time
+        
+        if hasattr(signal, 'SIGALRM'):
+            signal.alarm(0)  # Cancel timeout
+        
+        # Filter results to requested station if needed
+        if station and station != "All Stations":
+            # Handle multiple stations (comma-separated)
+            requested_stations = [s.strip() for s in station.split(',')]
+            filtered_outliers = [outlier for outlier in result.get('outliers', []) 
+                               if outlier.get('Station') in requested_stations]
+            result['outliers'] = filtered_outliers
+            result['outliers_detected'] = len(filtered_outliers)
+            result['outlier_percentage'] = round(len(filtered_outliers) / result['total_records'] * 100, 2) if result['total_records'] > 0 else 0
+            # Sanitize station names for logging to prevent log injection
+            safe_stations = [station.replace('\n', '').replace('\r', '')[:50] for station in requested_stations]
+            logger.info(f"Filtered {len(result.get('outliers', []))} total outliers to {len(filtered_outliers)} for station(s) {safe_stations}")
+        else:
+            logger.info(f"Returning all {result['outliers_detected']} outliers for all stations")
+        
+        result['processing_time_seconds'] = round(processing_time, 2)
+        
+        # Log validation statistics if available
+        if 'validation' in result:
+            validation = result['validation']
+            logger.info(f"Enhanced validation: {validation['total_exclusions']} exclusions out of {validation['total_validations']} validations ({validation['exclusion_rate']:.1f}% exclusion rate)")
+        
+        logger.info(f"Enhanced outliers result: {result['outliers_detected']} outliers found in {result['total_records']} records (processed in {processing_time:.2f}s)")
+        return JSONResponse(content=result, status_code=200)
+        
+    except TimeoutError:
+        logger.error("Outlier processing timeout - dataset too large")
+        return JSONResponse(
+            content={
+                "error": "Processing timeout",
+                "message": "Dataset too large for outlier processing. Try a smaller date range.",
+                "total_records": 0,
+                "outliers_detected": 0,
+                "validation": {
+                    "total_validations": 0,
+                    "total_exclusions": 0,
+                    "exclusion_rate": 0,
+                    "outliers_detected": 0,
+                    "baseline_calculations": 0
+                },
+                "outliers": []
+            },
+            status_code=408
+        )
+    except Exception as e:
+        logger.error(f"Error getting enhanced outliers: {e}")
+        return JSONResponse(
+            content={
+                "error": "Processing failed",
+                "message": str(e),
+                "total_records": 0,
+                "outliers_detected": 0,
+                "validation": {
+                    "total_validations": 0,
+                    "total_exclusions": 0,
+                    "exclusion_rate": 0,
+                    "outliers_detected": 0,
+                    "baseline_calculations": 0
+                },
+                "outliers": []
+            },
+            status_code=500
+        )
+
+
+@app.get("/api/corrections")
+async def get_corrections(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    station: str = "All Stations"
+):
+    """Get correction suggestions for outliers"""
+    if not BASELINE_API_AVAILABLE:
+        return JSONResponse(
+            content={"error": "Baseline rules not available"},
+            status_code=503
+        )
+    
+    try:
+        # ✅ ALWAYS load all stations data to ensure proper baseline computation
+        df_all = load_data_from_db(start_date, end_date, "All Stations")
+        logger.info(f"Loaded data for all stations: {len(df_all) if df_all is not None else 0} records")
+
+        if df_all is None or df_all.empty:
+            logger.warning("No data found for corrections computation")
+            return JSONResponse(
+                content={
+                    "error": "No data found",
+                    "message": f"No data available for the specified time range",
+                    "total_suggestions": 0,
+                    "suggestions": []
+                },
+                status_code=200
+            )
+            
+        # Get corrections for all stations first
+        result = get_corrections_api(df_all)
+        
+        # Filter suggestions to requested station if needed
+        if station and station != "All Stations":
+            filtered = [s for s in result.get('suggestions', []) if s.get('station') == station]
+            result = {
+                'total_suggestions': len(filtered),
+                'suggestions': filtered,
+                'timestamp': result.get('timestamp')
+            }
+            # Sanitize station name for logging to prevent log injection
+            safe_station = station.replace('\n', '').replace('\r', '')[:50] if station else 'Unknown'
+            logger.info(f"Filtered {len(filtered)} suggestions for station {safe_station}")
+        
+        return JSONResponse(content=result, status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error getting corrections: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/validation_report")
+async def get_validation_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Get comprehensive validation report"""
+    if not BASELINE_API_AVAILABLE:
+        return JSONResponse(
+            content={"error": "Baseline rules not available"},
+            status_code=503
+        )
+    
+    try:
+        # Load data for all stations
+        df = load_data_from_db(start_date, end_date, "All Stations")
+        
+        if df is None or df.empty:
+            return JSONResponse(content={"error": "No data found"}, status_code=404)        
+        # Generate report
+        processor = BaselineIntegratedProcessor()
+        report = processor.generate_validation_report(df)
+        
+        return JSONResponse(content=report, status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error generating validation report: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
 
 @app.get("/api/mariners-forecast-direct")
 async def get_mariners_forecast_direct():

@@ -1,0 +1,56 @@
+﻿{
+    "total_records":  10,
+    "outliers_detected":  4,
+    "outlier_percentage":  40.0,
+    "outliers":  [
+                     {
+                         "Tab_DateTime":  "2025-11-06 00:00:00",
+                         "Station":  "Haifa",
+                         "Tab_Value_mDepthC1":  0.663,
+                         "Tab_Value_monT2m":  25.36,
+                         "Southern_Baseline":  0.319,
+                         "Expected_Value":  0.359,
+                         "Is_Outlier":  true,
+                         "Corrected_Value":  0.359,
+                         "Deviation":  0.30400000000000005,
+                         "anomaly":  -1
+                     },
+                     {
+                         "Tab_DateTime":  "2025-11-06 00:00:00",
+                         "Station":  "Eilat",
+                         "Tab_Value_mDepthC1":  -0.009000000000000001,
+                         "Tab_Value_monT2m":  25.3,
+                         "Southern_Baseline":  0.319,
+                         "Expected_Value":  0.489,
+                         "Is_Outlier":  true,
+                         "Corrected_Value":  0.489,
+                         "Deviation":  0.498,
+                         "anomaly":  -1
+                     },
+                     {
+                         "Tab_DateTime":  "2025-11-06 00:00:00",
+                         "Station":  "Eilat",
+                         "Tab_Value_mDepthC1":  -0.009000000000000001,
+                         "Tab_Value_monT2m":  25.3,
+                         "Southern_Baseline":  0.319,
+                         "Expected_Value":  0.489,
+                         "Is_Outlier":  true,
+                         "Corrected_Value":  0.489,
+                         "Deviation":  0.498,
+                         "anomaly":  -1
+                     },
+                     {
+                         "Tab_DateTime":  "2025-11-06 00:00:00",
+                         "Station":  "Haifa",
+                         "Tab_Value_mDepthC1":  0.663,
+                         "Tab_Value_monT2m":  25.36,
+                         "Southern_Baseline":  0.319,
+                         "Expected_Value":  0.359,
+                         "Is_Outlier":  true,
+                         "Corrected_Value":  0.359,
+                         "Deviation":  0.30400000000000005,
+                         "anomaly":  -1
+                     }
+                 ],
+    "timestamp":  "2025-11-10T08:34:49.570101"
+}

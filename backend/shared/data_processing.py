@@ -33,11 +33,25 @@ except ImportError:
     logger.warning("Scikit-learn not available - anomaly detection will be disabled")
     SKLEARN_AVAILABLE = False
 
+# Import baseline rules integration
+try:
+    from .baseline_integration import BaselineIntegratedProcessor
+    BASELINE_INTEGRATION_AVAILABLE = True
+except ImportError:
+    logger.warning("Baseline integration not available")
+    BASELINE_INTEGRATION_AVAILABLE = False
+
 def load_data_from_db(start_date=None, end_date=None, station=None, data_source='default'):
     """
     Optimized data loading with proper error handling and caching
     """
     try:
+        # Normalize date formats
+        if start_date:
+            start_date = normalize_date_format(start_date)
+        if end_date:
+            end_date = normalize_date_format(end_date)
+        
         # Generate deterministic cache key to prevent collisions
         import hashlib
         cache_params = f"{start_date}_{end_date}_{station}_{data_source}"
@@ -47,13 +61,14 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
         cached_data = db_manager.get_from_cache(cache_key)
         if cached_data:
             try:
-                return pd.read_json(cached_data, orient='records')
+                from io import StringIO
+                return pd.read_json(StringIO(cached_data), orient='records')
             except Exception as e:
                 logger.warning(f"Failed to parse cached data: {e}")
         
         # Validate inputs
-        if not all([db_manager.M, db_manager.L, db_manager.S]):
-            logger.error("Database tables not properly loaded")
+        if not db_manager or not hasattr(db_manager, 'M') or not hasattr(db_manager, 'L'):
+            logger.error("Database manager or tables not properly loaded")
             return pd.DataFrame()
         
         # Build and execute query
@@ -75,6 +90,7 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
                 df_chunks.append(df_chunk)
 
         if not df_chunks:
+            logger.warning(f"No data found for query: start={start_date}, end={end_date}, station={station}")
             return pd.DataFrame()
         
         df = pd.concat(df_chunks, ignore_index=True)
@@ -91,7 +107,30 @@ def load_data_from_db(start_date=None, end_date=None, station=None, data_source=
 
     except Exception as e:
         logger.error(f"Data load error: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return pd.DataFrame()
+
+def normalize_date_format(date_str):
+    """
+    Normalize various date formats to YYYY-MM-DD
+    """
+    if not date_str:
+        return None
+    
+    # Handle DD_MM_YYYY format
+    if '_' in date_str and len(date_str.split('_')) == 3:
+        parts = date_str.split('_')
+        if len(parts[0]) == 2 and len(parts[1]) == 2 and len(parts[2]) == 4:
+            # DD_MM_YYYY -> YYYY-MM-DD
+            return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    
+    # Handle YYYY-MM-DD format (already correct)
+    if '-' in date_str and len(date_str.split('-')) == 3:
+        return date_str
+    
+    # Return as-is if format not recognized
+    return date_str
 
 def build_query(start_date, end_date, station, data_source):
     """
@@ -111,37 +150,59 @@ def build_query(start_date, end_date, station, data_source):
         date_col_name = None
 
         if data_source == 'tides':
+            if not hasattr(db_manager, 'S') or db_manager.S is None:
+                logger.error("Tides table (S) not available")
+                return None
             cols_to_select = tides_columns()
             table_for_date_filter = db_manager.S
             date_col_name = 'Date'
             stmt = select(*cols_to_select).select_from(db_manager.S)
         else:
+            if not hasattr(db_manager, 'M') or not hasattr(db_manager, 'L') or db_manager.M is None or db_manager.L is None:
+                logger.error("Main tables (M, L) not available")
+                return None
             cols_to_select = default_columns()
             join_condition = db_manager.M.c.Tab_TabularTag == db_manager.L.c.Tab_TabularTag
             stmt = select(*cols_to_select).select_from(db_manager.M.join(db_manager.L, join_condition))
             table_for_date_filter = db_manager.M
             date_col_name = 'Tab_DateTime'
 
-        # Apply date filters
-        if start_date:
-            stmt = stmt.where(table_for_date_filter.c[date_col_name] >= params['start_date'])
-        if end_date:
-            stmt = stmt.where(table_for_date_filter.c[date_col_name] <= params['end_date'])
+        # Apply date filters with proper validation
+        if start_date and table_for_date_filter is not None:
+            try:
+                stmt = stmt.where(table_for_date_filter.c[date_col_name] >= params['start_date'])
+            except Exception as e:
+                logger.error(f"Error applying start_date filter: {e}")
+                
+        if end_date and table_for_date_filter is not None:
+            try:
+                stmt = stmt.where(table_for_date_filter.c[date_col_name] <= params['end_date'])
+            except Exception as e:
+                logger.error(f"Error applying end_date filter: {e}")
 
-        # Apply station filter
-        if data_source == 'default' and 'station' in params:
-            stmt = stmt.where(db_manager.L.c.Station == params['station'])
-        elif data_source == 'tides' and 'station' in params:
-            stmt = stmt.where(db_manager.S.c.Station == params['station'])
+        # Apply station filter with proper validation
+        if 'station' in params:
+            try:
+                if data_source == 'default':
+                    stmt = stmt.where(db_manager.L.c.Station == params['station'])
+                elif data_source == 'tides':
+                    stmt = stmt.where(db_manager.S.c.Station == params['station'])
+            except Exception as e:
+                logger.error(f"Error applying station filter: {e}")
 
-        # Add ordering
+        # Add ordering with proper validation
         if date_col_name and table_for_date_filter is not None:
-            stmt = stmt.order_by(table_for_date_filter.c[date_col_name])
+            try:
+                stmt = stmt.order_by(table_for_date_filter.c[date_col_name])
+            except Exception as e:
+                logger.error(f"Error applying ordering: {e}")
 
         return stmt
 
     except Exception as e:
         logger.error(f"Query building error: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 def default_columns():
@@ -226,7 +287,9 @@ def arima_predict(station: str) -> Optional[list]:
         return result
         
     except Exception as e:
-        logger.error(f"ARIMA prediction failed for station {station}: {str(e)}")
+        # Sanitize station name for logging to prevent XSS
+        safe_station = str(station).replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')[:50] if station else 'Unknown'
+        logger.error(f"ARIMA prediction failed for station {safe_station}: {str(e)}")
         return None
 
 def prophet_predict(station: str) -> Optional[pd.DataFrame]:
@@ -289,13 +352,26 @@ def prophet_predict(station: str) -> Optional[pd.DataFrame]:
         return result
         
     except Exception as e:
-        logger.error(f"Prophet prediction failed for station {station}: {str(e)}")
+        # Sanitize station name for logging to prevent XSS
+        safe_station = str(station).replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')[:50] if station else 'Unknown'
+        logger.error(f"Prophet prediction failed for station {safe_station}: {str(e)}")
         return pd.DataFrame()
 
 def detect_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Anomaly detection with proper error handling
+    Anomaly detection with Southern Baseline Rules integration
     """
+    # Try baseline rules first
+    if BASELINE_INTEGRATION_AVAILABLE:
+        try:
+            processor = BaselineIntegratedProcessor()
+            df = processor.detect_anomalies_with_rules(df)
+            logger.info("Using Southern Baseline Rules for anomaly detection")
+            return df
+        except Exception as e:
+            logger.warning(f"Baseline rules failed, falling back to IQR: {e}")
+    
+    # Fallback to original IQR method
     if not SKLEARN_AVAILABLE:
         logger.warning("Scikit-learn not available")
         df['anomaly'] = 0

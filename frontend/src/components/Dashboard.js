@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import { Container, Row, Col, Card, Form, Tabs, Tab, Badge, Button, Spinner, Collapse } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import Plot from 'react-plotly.js';
-import * as XLSX from 'xlsx';
+// Plotly lazy loaded below
+
 import ErrorBoundary from './ErrorBoundary';
 import DateRangePicker from './DateRangePicker';
 import CustomDropdown from './CustomDropdown';
@@ -14,6 +14,7 @@ import { formatDateTime, isValidDate } from '../utils/dateUtils';
 import apiService from '../services/apiService';
 
 // Lazy load heavy components
+const Plot = lazy(() => import('react-plotly.js'));
 const OSMMap = lazy(() => import('./OSMMap'));
 const SeaForecastView = lazy(() => import('./SeaForecastView'));
 const MarinersForecastView = lazy(() => import('./MarinersForecastView'));
@@ -47,12 +48,16 @@ function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [forecastPage, setForecastPage] = useState(1);
   const [itemsPerPage] = useState(50);
+  
+  // Refs for component state
   const plotRef = useRef(null);
   const abortControllerRef = useRef(null);
-  
-  // ✅ FIX 1.5-1.7: Add mount tracking & cleanup
   const isMounted = useRef(true);
+  const isFetchingRef = useRef(false);  // ✅ FIX 2: Add fetch tracking ref
   const debounceTimerRef = useRef(null);
+  const outliersCache = useRef(new Map());
+  const lastFetchTime = useRef(0);
+  const lastOutliersRequestTime = useRef(0);
   
   // NEW: Add mobile detection and filter collapse state
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -273,13 +278,20 @@ function Dashboard() {
 
   // Memoize filter values to prevent unnecessary re-renders
   const filterValues = useMemo(() => ({
-    startDate: filters.startDate.getTime(),
-    endDate: filters.endDate.getTime(),
+    startDate: filters.startDate.toISOString().split('T')[0],
+    endDate: filters.endDate.toISOString().split('T')[0],
     dataType: filters.dataType,
     showAnomalies: filters.showAnomalies,
     trendline: filters.trendline,
     analysisType: filters.analysisType
-  }), [filters.startDate, filters.endDate, filters.dataType, filters.showAnomalies, filters.trendline, filters.analysisType]);
+  }), [
+    filters.startDate,
+    filters.endDate, 
+    filters.dataType,
+    filters.showAnomalies,
+    filters.trendline,
+    filters.analysisType
+  ]);
 
   // Memoize selected stations array
   const stableSelectedStations = useMemo(() => selectedStations, [selectedStations.join(',')]);
@@ -384,7 +396,19 @@ function Dashboard() {
 
   // ✅ CRITICAL FIX: Stabilize fetchData with proper dependencies to prevent infinite loop
   const fetchData = useCallback(async () => {
-    if (loading || stations.length === 0 || stableSelectedStations.length === 0) return;
+    // ✅ FIX 3: Check isFetchingRef first
+    if (isFetchingRef.current) {
+      console.log('⛔ Already fetching - blocked');
+      return;
+    }
+    
+    if (loading || !stations.length || !stableSelectedStations.length) {
+      console.log('⛔ Invalid state - blocked');
+      return;
+    }
+    
+    isFetchingRef.current = true;
+    console.log('🔵 Starting fetch');
     
     // Cancel previous request
     if (abortControllerRef.current) {
@@ -396,48 +420,203 @@ function Dashboard() {
     try {
       let allData = [];
 
+      // Determine which stations to fetch
+      let stationsToFetch = [];
       if (stableSelectedStations.includes('All Stations')) {
-        const stationList = stations.filter(s => s !== 'All Stations');
-        
-        for (const station of stationList) {
-          const params = {
-            station: station,
-            start_date: formatDateForAPI(new Date(filterValues.startDate)),
-            end_date: formatDateForAPI(new Date(filterValues.endDate)),
-            data_source: filterValues.dataType,
-            show_anomalies: filterValues.showAnomalies.toString()
-          };
+        stationsToFetch = stations.filter(s => s !== 'All Stations');
+      } else {
+        stationsToFetch = stableSelectedStations.filter(s => s !== 'All Stations').slice(0, 3);
+      }
 
+      if (stationsToFetch.length === 0) {
+        console.warn('No stations to fetch');
+        setLoading(false);
+        return;
+      }
+
+      // Use batch endpoint for parallel fetching
+      const params = {
+        start_date: filterValues.startDate,
+        end_date: filterValues.endDate,
+        data_source: filterValues.dataType
+      };
+
+      try {
+        console.log(`⚡ Fetching data for ${stationsToFetch.length} stations in parallel`);
+        const startTime = performance.now();
+
+        allData = await apiService.getDataBatch(stationsToFetch, params);
+
+        const endTime = performance.now();
+        console.log(`✅ Batch fetch completed in ${(endTime - startTime).toFixed(0)}ms for ${stationsToFetch.length} stations`);
+
+        if (!Array.isArray(allData)) {
+          console.error('Batch data is not an array:', allData);
+          allData = [];
+        }
+      } catch (err) {
+        console.error('Error fetching batch data:', err);
+        // Fallback: try fetching stations one by one
+        console.log('Falling back to sequential fetching...');
+        allData = [];
+        for (const station of stationsToFetch) {
           try {
-            const data = await apiService.getData(params);
+            const data = await apiService.getData({ ...params, station });
             if (Array.isArray(data) && data.length > 0) {
               allData = allData.concat(data);
-            } else if (data.length === 0) {
-              console.info(`No data available for ${station} in the selected period`);
             }
-          } catch (err) {
-            console.error(`Error fetching data for ${station}:`, err);
+          } catch (stationErr) {
+            console.error(`Error fetching data for ${station}:`, stationErr);
           }
         }
-      } else {
-        for (const station of stableSelectedStations.filter(s => s !== 'All Stations').slice(0, 3)) {
-          const params = {
-            station: station,
-            start_date: formatDateForAPI(new Date(filterValues.startDate)),
-            end_date: formatDateForAPI(new Date(filterValues.endDate)),
-            data_source: filterValues.dataType,
-            show_anomalies: filterValues.showAnomalies.toString()
-          };
+      }
 
-          try {
-            const data = await apiService.getData(params);
-            if (Array.isArray(data) && data.length > 0) {
-              allData = allData.concat(data);
-            } else if (data.length === 0) {
-              console.info(`No data available for ${station} in the selected period`);
+      // NEW: Fetch outliers using Southern Baseline Rules if Show Anomalies is enabled
+      if (filterValues.showAnomalies && allData.length > 0) {
+        try {
+          // Global throttling - prevent any outliers request within 30 seconds (reduced for testing)
+          const timeSinceLastOutliersRequest = Date.now() - lastOutliersRequestTime.current;
+          if (timeSinceLastOutliersRequest < 30000) {
+            console.log('Outliers request globally throttled (30s cooldown)');
+            return;
+          }
+          
+          const stationParam = stableSelectedStations.includes('All Stations') ? 'All Stations' : stableSelectedStations.join(',');
+          const cacheKey = `${stationParam}_${filterValues.startDate}_${filterValues.endDate}`;
+          
+          // Check cache first
+          const cachedOutliers = outliersCache.current.get(cacheKey);
+          if (cachedOutliers && Date.now() - cachedOutliers.timestamp < 1800000) { // 30 minute cache
+            console.log('Using cached outliers data');
+            const outlierMap = new Map();
+            let cachedOutlierCount = 0;
+            cachedOutliers.data.forEach(outlier => {
+              const key = `${outlier.Station}_${outlier.Tab_DateTime}`;
+              outlierMap.set(key, true);
+              cachedOutlierCount++;
+            });
+            
+            let cachedMarkedCount = 0;
+            allData.forEach(dataPoint => {
+              // Try multiple key formats for cached data too
+              const station = dataPoint.Station;
+              const datetime = dataPoint.Tab_DateTime;
+              
+              const keys = [
+                `${station}_${datetime}`,
+                `${station}_${datetime.replace('T', ' ')}`,
+                `${station}_${datetime.split('T')[0]} ${datetime.split('T')[1]?.split('.')[0]}`,
+                `${station}_${new Date(datetime).toISOString().replace('T', ' ').split('.')[0]}`
+              ];
+              
+              let isOutlier = false;
+              for (const key of keys) {
+                if (outlierMap.has(key)) {
+                  isOutlier = true;
+                  break;
+                }
+              }
+              
+              if (isOutlier) {
+                dataPoint.anomaly = -1;
+                cachedMarkedCount++;
+              } else {
+                dataPoint.anomaly = 0;
+              }
+            });
+            
+            console.log(`Cached outlier mapping: ${cachedOutlierCount} cached outliers, ${cachedMarkedCount} data points marked as anomalies`);
+          } else {
+            // Add additional throttling for outliers requests
+            const outliersKey = `outliers_${stationParam}_${filterValues.startDate}_${filterValues.endDate}`;
+            const lastOutliersRequest = sessionStorage.getItem(outliersKey);
+            const timeSinceLastRequest = lastOutliersRequest ? Date.now() - parseInt(lastOutliersRequest) : Infinity;
+            
+            if (timeSinceLastRequest < 30000) { // 30 second throttle (reduced for testing)
+              console.log('Outliers request throttled - too recent (30s)');
+              return;
             }
-          } catch (err) {
-            console.error(`Error fetching data for ${station}:`, err);
+            
+            sessionStorage.setItem(outliersKey, Date.now().toString());
+            lastOutliersRequestTime.current = Date.now();
+            
+            console.log('Making outliers request for:', stationParam, filterValues.startDate, filterValues.endDate);
+            
+            const outliersResponse = await fetch(`${API_BASE_URL}/api/outliers?start_date=${filterValues.startDate}&end_date=${filterValues.endDate}&station=${encodeURIComponent(stationParam)}`, {
+              signal: abortControllerRef.current?.signal
+            });
+            
+            if (outliersResponse.ok) {
+              const outliersData = await outliersResponse.json();
+              console.log('Outliers data received:', outliersData);
+              
+              // Cache the outliers data
+              if (outliersData.outliers && Array.isArray(outliersData.outliers)) {
+                outliersCache.current.set(cacheKey, {
+                  data: outliersData.outliers,
+                  timestamp: Date.now()
+                });
+                
+                const outlierMap = new Map();
+                let outlierCount = 0;
+                outliersData.outliers.forEach(outlier => {
+                  const key = `${outlier.Station}_${outlier.Tab_DateTime}`;
+                  outlierMap.set(key, true);
+                  outlierCount++;
+                });
+                
+                let markedCount = 0;
+                allData.forEach(dataPoint => {
+                  // Try multiple key formats to handle datetime variations
+                  const station = dataPoint.Station;
+                  const datetime = dataPoint.Tab_DateTime;
+                  
+                  const keys = [
+                    `${station}_${datetime}`,
+                    `${station}_${datetime.replace('T', ' ')}`,
+                    `${station}_${datetime.split('T')[0]} ${datetime.split('T')[1]?.split('.')[0]}`,
+                    `${station}_${new Date(datetime).toISOString().replace('T', ' ').split('.')[0]}`
+                  ];
+                  
+                  let isOutlier = false;
+                  for (const key of keys) {
+                    if (outlierMap.has(key)) {
+                      isOutlier = true;
+                      break;
+                    }
+                  }
+                  
+                  if (isOutlier) {
+                    dataPoint.anomaly = -1;
+                    markedCount++;
+                  } else {
+                    dataPoint.anomaly = 0;
+                  }
+                });
+                
+                console.log(`Outlier mapping: ${outlierCount} outliers received, ${markedCount} data points marked as anomalies`);
+                
+                // Debug: Show sample keys for troubleshooting
+                if (outlierCount > 0 && markedCount === 0) {
+                  console.log('DEBUG: Sample outlier key:', Array.from(outlierMap.keys())[0]);
+                  console.log('DEBUG: Sample data key:', `${allData[0]?.Station}_${allData[0]?.Tab_DateTime}`);
+                  console.log('DEBUG: First few outliers:', outliersData.outliers.slice(0, 3));
+                  console.log('DEBUG: First few data points:', allData.slice(0, 3).map(d => ({Station: d.Station, Tab_DateTime: d.Tab_DateTime})));
+                }
+                
+                console.log(`Marked ${outliersData.outliers.length} outliers in data using Southern Baseline Rules`);
+              }
+            } else {
+              console.warn('Failed to fetch outliers data:', outliersResponse.status);
+            }
+          }
+        } catch (error) {
+          if (error.name !== 'AbortError') {
+            console.error('Error fetching outliers:', error);
+            // Reset anomaly flags to prevent inconsistent state
+            allData.forEach(dataPoint => {
+              dataPoint.anomaly = 0;
+            });
           }
         }
       }
@@ -457,7 +636,11 @@ function Dashboard() {
         // These will be calculated in createPlot memoization instead
         const enrichedData = optimizedData;
         
-        setTableData(enrichedData.sort((a, b) => new Date(a.Tab_DateTime || a.Date) - new Date(b.Tab_DateTime || b.Date)));
+        setTableData(enrichedData.sort((a, b) => {
+          const dateA = a.Tab_DateTime || a.Date;
+          const dateB = b.Tab_DateTime || b.Date;
+          return dateA.localeCompare(dateB); // ISO date strings can be compared directly
+        }));
         setCurrentPage(1);
         
         // ✅ INLINE stats calculation to avoid function dependency
@@ -465,13 +648,18 @@ function Dashboard() {
           const latest = allData[allData.length - 1];
           const levels = allData.map(d => d.Tab_Value_mDepthC1).filter(v => !isNaN(v));
           const temps = allData.map(d => d.Tab_Value_monT2m).filter(v => !isNaN(v));
+          const anomalyCount = allData.filter(d => d.anomaly === -1).length;
           
           setStats({
             current_level: latest?.Tab_Value_mDepthC1 || 0,
             '24h_change': levels.length > 1 ? levels[levels.length - 1] - levels[0] : 0,
             avg_temp: temps.length > 0 ? temps.reduce((a, b) => a + b, 0) / temps.length : 0,
-            anomalies: allData.filter(d => d.anomaly === -1).length
+            anomalies: anomalyCount
           });
+          
+          if (filterValues.showAnomalies && anomalyCount > 0) {
+            console.log(`✅ Southern Baseline Rules: Found ${anomalyCount} anomalies`);
+          }
         }
       } else {
         setGraphData([]);
@@ -483,19 +671,23 @@ function Dashboard() {
         console.error('Error fetching data:', error);
       }
     } finally {
+      // ✅ FIX 4: Reset isFetchingRef in finally block
       if (isMounted.current) {
         setLoading(false);
       }
+      
+      // Clear the abort controller and reset fetching flag
+      abortControllerRef.current = null;
+      isFetchingRef.current = false;
+      
+      console.log('✅ Fetch complete');
     }
   }, [
     // ✅ CRITICAL FIX: ONLY primitive values - NO FUNCTIONS!
     loading,
     stations,
-    selectedStations,
-    filters.startDate,
-    filters.endDate,
-    filters.dataType,
-    filters.showAnomalies
+    stableSelectedStations,
+    filterValues
   ]);
 
   // ✅ FIX 1.5: Enhanced cleanup on unmount
@@ -514,19 +706,35 @@ function Dashboard() {
         abortControllerRef.current.abort();
       }
       apiService.cancelAllRequests();
+      
+      // Clear outliers cache
+      outliersCache.current.clear();
+      
+      // Reset fetching flag
+      isFetchingRef.current = false;
     };
   }, []);
 
   // Debounced data fetching with stable dependencies
   useEffect(() => {
     if (stations.length > 0 && selectedStations.length > 0) {
-      const timeoutId = setTimeout(() => {
-        fetchData();
-      }, 300);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
       
-      return () => clearTimeout(timeoutId);
+      debounceTimerRef.current = setTimeout(() => {
+        if (isMounted.current && !isFetchingRef.current) {
+          fetchData();
+        }
+      }, 2000); // Further increased debounce time to prevent rapid calls
+      
+      return () => {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+      };
     }
-  }, [fetchData]);
+  }, [fetchData, stations.length, selectedStations.length]);
   
   // ✅ FIX 2.2: Defer GovMap loading until dashboard is ready
   useEffect(() => {
@@ -953,7 +1161,7 @@ function Dashboard() {
         format: 'png',
         width: 1200,
         height: 600,
-        filename: `sea_level_graph_${selectedStations.join('_')}_${new Date().toISOString().split('T')[0]}`
+        filename: `sea_level_graph_${selectedStations.join('_')}_${filters.endDate.toISOString().split('T')[0]}`
       });
     }
   };
@@ -972,44 +1180,52 @@ function Dashboard() {
       return;
     }
 
-    const workbook = {
-      SheetNames: ['Historical Data'],
-      Sheets: {}
-    };
+    // Dynamic import of XLSX library
+    import('xlsx').then(XLSX => {
+      const workbook = {
+        SheetNames: ['Historical Data'],
+        Sheets: {}
+      };
 
-    // Historical data worksheet
-    workbook.Sheets['Historical Data'] = XLSX.utils.json_to_sheet(tableData);
+      // Historical data worksheet
+      workbook.Sheets['Historical Data'] = XLSX.utils.json_to_sheet(tableData);
 
-    // Forecast data worksheet
-    const predictionRows = [];
-    Object.entries(predictions).forEach(([stationKey, stationPredictions]) => {
-      if (stationKey === 'global_metadata' || !stationPredictions) return;
-      
-      ['kalman', 'ensemble', 'arima'].forEach(model => {
-        if (stationPredictions[model] && Array.isArray(stationPredictions[model])) {
-          stationPredictions[model].forEach((pred) => {
-            predictionRows.push({
-              Station: stationKey,
-              Model: model,
-              DateTime: pred.ds,
-              PredictedLevel: pred.yhat || pred,
-              Type: pred.type || 'forecast',
-              Uncertainty: pred.uncertainty || '',
-              UpperBound: pred.yhat_upper || '',
-              LowerBound: pred.yhat_lower || ''
+      // Forecast data worksheet
+      const predictionRows = [];
+      Object.entries(predictions).forEach(([stationKey, stationPredictions]) => {
+        if (stationKey === 'global_metadata' || !stationPredictions) return;
+
+        ['kalman', 'ensemble', 'arima'].forEach(model => {
+          if (stationPredictions[model] && Array.isArray(stationPredictions[model])) {
+            stationPredictions[model].forEach((pred) => {
+              predictionRows.push({
+                Station: stationKey,
+                Model: model,
+                DateTime: pred.ds,
+                PredictedLevel: pred.yhat || pred,
+                Type: pred.type || 'forecast',
+                Uncertainty: pred.uncertainty || '',
+                UpperBound: pred.yhat_upper || '',
+                LowerBound: pred.yhat_lower || ''
+              });
             });
-          });
-        }
+          }
+        });
       });
+
+      if (predictionRows.length > 0) {
+        workbook.SheetNames.push('Forecast Data');
+        workbook.Sheets['Forecast Data'] = XLSX.utils.json_to_sheet(predictionRows);
+      }
+
+      const today = filters.endDate.toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `sea_level_data_${selectedStations.join('_')}_${today}.xlsx`);
+    }).catch(err => {
+      console.error('Failed to load XLSX library:', err);
+      alert('Failed to export data. Please try again.');
     });
-
-    if (predictionRows.length > 0) {
-      workbook.SheetNames.push('Forecast Data');
-      workbook.Sheets['Forecast Data'] = XLSX.utils.json_to_sheet(predictionRows);
-    }
-
-    XLSX.writeFile(workbook, `sea_level_data_${selectedStations.join('_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
+
 
   // Universal fullscreen toggle functions
   const toggleGraphFullscreen = useCallback(() => {
@@ -1237,11 +1453,14 @@ function Dashboard() {
                 <Form.Group className="mb-2">
                   <Form.Check
                     type="checkbox"
-                    label="Show Anomalies"
+                    label="Show Anomalies (Southern Baseline Rules)"
                     checked={filters.showAnomalies}
                     onChange={(e) => handleFilterChange('showAnomalies', e.target.checked)}
                     className="small"
                   />
+                  <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>
+                    Uses Israeli sea level monitoring rules
+                  </small>
                 </Form.Group>
 
                 <Form.Group className="mb-2">
@@ -1437,6 +1656,7 @@ function Dashboard() {
                             transition: 'all 0.3s ease'
                           }}
                         >
+                          <Suspense fallback={<div className="text-center p-5"><Spinner animation="border" variant="primary" /><p className="mt-2">Loading chart...</p></div>}>
                           <Plot
                             ref={plotRef}
                             data={createPlot.data}
@@ -1466,6 +1686,7 @@ function Dashboard() {
                             }}
                             useResizeHandler={true}
                           />
+                          </Suspense>
                         </div>
 
                         {/* Fullscreen Controls - Below Graph */}
@@ -1670,7 +1891,7 @@ function Dashboard() {
                             predictionRows.sort((a, b) => {
                               if (a.station !== b.station) return a.station.localeCompare(b.station);
                               if (a.model !== b.model) return a.model.localeCompare(b.model);
-                              return new Date(a.datetime) - new Date(b.datetime);
+                              return a.datetime.localeCompare(b.datetime);
                             });
                             
                             return predictionRows.length > 0 ? (
@@ -1697,7 +1918,7 @@ function Dashboard() {
                                           {row.model.toUpperCase()}
                                         </Badge>
                                       </td>
-                                      <td>{new Date(row.datetime).toISOString().replace('T', ' ').replace('.000Z', '')}</td>
+                                      <td>{row.datetime.replace('T', ' ').replace(/\.\d+Z$/, '')}</td>
                                       <td>{typeof row.value === 'number' ? row.value.toFixed(3) : 'N/A'}</td>
                                       <td>
                                         <Badge bg={row.type === 'nowcast' ? 'primary' : 'secondary'}>

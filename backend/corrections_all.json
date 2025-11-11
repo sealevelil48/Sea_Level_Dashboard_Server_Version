@@ -1,0 +1,46 @@
+﻿{
+    "total_suggestions":  4,
+    "suggestions":  [
+                        {
+                            "station":  "Haifa",
+                            "actual":  0.663,
+                            "expected":  0.359,
+                            "corrected":  0.359,
+                            "deviation":  0.30400000000000005,
+                            "baseline":  0.319,
+                            "message":  "Haifa is 0.304m off. Expected: 0.359m (baseline + 0.04m), Measured: 0.663m",
+                            "timestamp":  "2025-11-06 00:00:00"
+                        },
+                        {
+                            "station":  "Eilat",
+                            "actual":  -0.009000000000000001,
+                            "expected":  0.489,
+                            "corrected":  0.489,
+                            "deviation":  0.498,
+                            "baseline":  0.319,
+                            "message":  "Eilat is 0.498m off. Expected: 0.489m (baseline + 0.17m), Measured: -0.009m",
+                            "timestamp":  "2025-11-06 00:00:00"
+                        },
+                        {
+                            "station":  "Eilat",
+                            "actual":  -0.009000000000000001,
+                            "expected":  0.489,
+                            "corrected":  0.489,
+                            "deviation":  0.498,
+                            "baseline":  0.319,
+                            "message":  "Eilat is 0.498m off. Expected: 0.489m (baseline + 0.17m), Measured: -0.009m",
+                            "timestamp":  "2025-11-06 00:00:00"
+                        },
+                        {
+                            "station":  "Haifa",
+                            "actual":  0.663,
+                            "expected":  0.359,
+                            "corrected":  0.359,
+                            "deviation":  0.30400000000000005,
+                            "baseline":  0.319,
+                            "message":  "Haifa is 0.304m off. Expected: 0.359m (baseline + 0.04m), Measured: 0.663m",
+                            "timestamp":  "2025-11-06 00:00:00"
+                        }
+                    ],
+    "timestamp":  "2025-11-10T09:26:44.592992"
+}

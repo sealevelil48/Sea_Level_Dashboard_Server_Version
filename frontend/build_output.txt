@@ -1,0 +1,152 @@
+
+> sea-level-frontend@0.1.0 build
+> cross-env GENERATE_SOURCEMAP=false react-scripts build
+
+Creating an optimized production build...
+Compiled with warnings.
+
+[eslint] 
+src\components\CustomDropdown.js
+  Line 4:53:  'label' is defined but never used. Allowed unused args must match /^_/u  no-unused-vars
+
+src\components\Dashboard.js
+  Line 13:26:   'isValidDate' is defined but never used                                                                                                                                                                                                                                    no-unused-vars
+  Line 25:7:    'formatDateForAPI' is assigned a value but never used                                                                                                                                                                                                                      no-unused-vars
+  Line 41:24:   'setForecastData' is assigned a value but never used                                                                                                                                                                                                                       no-unused-vars
+  Line 59:9:    'lastFetchTime' is assigned a value but never used                                                                                                                                                                                                                         no-unused-vars
+  Line 92:9:    'isTablet' is assigned a value but never used                                                                                                                                                                                                                              no-unused-vars
+  Line 139:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 144:9:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 156:9:   'calculateStats' is assigned a value but never used                                                                                                                                                                                                                        no-unused-vars
+  Line 242:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 252:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 264:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 267:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 268:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 297:66:  React Hook useMemo has a missing dependency: 'selectedStations'. Either include it or remove the dependency array                                                                                                                                                          react-hooks/exhaustive-deps
+  Line 297:67:  React Hook useMemo has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked                                                                                                                                     react-hooks/exhaustive-deps
+  Line 315:21:  'config' is defined but never used. Allowed unused args must match /^_/u                                                                                                                                                                                                   no-unused-vars
+  Line 401:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 406:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 411:5:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 439:15:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 442:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 459:15:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 462:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 473:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 483:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 521:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 529:15:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 536:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 544:15:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 590:17:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 594:19:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 595:19:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 596:19:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 597:19:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 600:17:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 603:15:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 608:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 624:9:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 654:13:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 664:9:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 676:7:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 704:21:  The ref value 'outliersCache.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'outliersCache.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+  Line 738:9:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 752:9:   Unexpected console statement                                                                                                                                                                                                                                               no-console
+  Line 1217:7:  Unexpected console statement                                                                                                                                                                                                                                               no-console
+
+src\components\DateRangePicker.js
+  Line 2:114:  'addDays' is defined but never used  no-unused-vars
+
+src\components\ErrorBoundary.js
+  Line 11:35:  'error' is defined but never used. Allowed unused args must match /^_/u  no-unused-vars
+  Line 16:5:   Unexpected console statement                                             no-console
+
+src\components\MarinersForecastView.js
+  Line 47:7:  Unexpected console statement  no-console
+
+src\components\OSMMap.js
+  Line 28:5:    Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 33:19:   'stations' is defined but never used. Allowed unused args must match /^_/u                                                                                                                                                                              no-unused-vars
+  Line 33:29:   'currentStation' is defined but never used. Allowed unused args must match /^_/u                                                                                                                                                                        no-unused-vars
+  Line 134:11:  Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 139:9:   Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 143:11:  Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 160:9:   Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 188:9:   Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 199:9:   Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 204:6:   React Hook useEffect has a missing dependency: 'stationCoordinates'. Either include it or remove the dependency array                                                                                                                                   react-hooks/exhaustive-deps
+  Line 216:11:  Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 268:9:   Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 273:6:   React Hook useEffect has a missing dependency: 'updateMarkersWithData'. Either include it or remove the dependency array. Mutable values like 'mapInstanceRef.current' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+  Line 332:7:   Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 341:9:   Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 394:6:   React Hook useEffect has missing dependencies: 'getForecastForStation' and 'stationToForecastMapping'. Either include them or remove the dependency array                                                                                               react-hooks/exhaustive-deps
+  Line 408:15:  Unexpected console statement                                                                                                                                                                                                                            no-console
+  Line 416:11:  Unexpected console statement                                                                                                                                                                                                                            no-console
+
+src\components\SeaForecastView.js
+  Line 19:7:  Unexpected console statement  no-console
+  Line 23:9:  Unexpected console statement  no-console
+  Line 27:9:  Unexpected console statement  no-console
+  Line 31:7:  Unexpected console statement  no-console
+
+src\components\WarningsCard.js
+  Line 27:9:  Unexpected console statement                              no-console
+  Line 65:9:  'formatTitleWithTime' is assigned a value but never used  no-unused-vars
+
+src\hooks\useFavorites.js
+  Line 15:7:  Unexpected console statement  no-console
+  Line 34:9:  Unexpected console statement  no-console
+  Line 42:7:  Unexpected console statement  no-console
+  Line 55:7:  Unexpected console statement  no-console
+  Line 62:7:  Unexpected console statement  no-console
+  Line 75:7:  Unexpected console statement  no-console
+  Line 92:7:  Unexpected console statement  no-console
+
+src\hooks\usePerformanceMonitor.js
+  Line 13:13:  Unexpected console statement  no-console
+
+src\services\apiService.js
+  Line 122:13:  Unexpected console statement  no-console
+  Line 147:7:   Unexpected console statement  no-console
+  Line 169:9:   Unexpected console statement  no-console
+  Line 172:7:   Unexpected console statement  no-console
+  Line 187:7:   Unexpected console statement  no-console
+  Line 196:7:   Unexpected console statement  no-console
+  Line 205:7:   Unexpected console statement  no-console
+  Line 226:7:   Unexpected console statement  no-console
+
+Search for the keywords to learn more about each warning.
+To ignore, add // eslint-disable-next-line to the line before.
+
+File sizes after gzip:
+
+  1.37 MB   build\static\js\202.5f1a854e.chunk.js
+  98.26 kB  build\static\js\main.0ccc42f2.js
+  92.55 kB  build\static\js\271.140ee966.chunk.js
+  42.82 kB  build\static\js\527.6945c7d9.chunk.js
+  35.22 kB  build\static\css\main.3887ad52.css
+  6.34 kB   build\static\css\392.d6bfd15f.chunk.css
+  4.72 kB   build\static\js\617.0c6a03c3.chunk.js
+  3.83 kB   build\static\js\359.ffb12547.chunk.js
+  2.85 kB   build\static\js\361.88025239.chunk.js
+  141 B     build\static\js\392.1d5d02f2.chunk.js
+
+The bundle size is significantly larger than recommended.
+Consider reducing it with code splitting: https://goo.gl/9VhYWB
+You can also analyze the project dependencies: https://goo.gl/LeUzfb
+
+The project was built assuming it is hosted at /.
+You can control this with the homepage field in your package.json.
+
+The build folder is ready to be deployed.
+You may serve it with a static server:
+
+  serve -s build
+
+Find out more about deployment here:
+
+  https://cra.link/deployment
+
