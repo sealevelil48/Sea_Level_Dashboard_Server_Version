@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import json
-from lambdas.get_stations.main import handler as get_stations
-from lambdas.get_yesterday_data.main import handler as get_yesterday_data
-from lambdas.get_live_data.main import handler as get_live_data
-from lambdas.get_data.main import handler as get_data
-from lambdas.get_predictions.main import handler as get_predictions
-from lambdas.get_station_map.main import handler as get_station_map
+from lambdas.get_stations.main import lambda_handler as get_stations
+from lambdas.get_yesterday_data.main import lambda_handler as get_yesterday_data
+from lambdas.get_live_data.main import lambda_handler as get_live_data
+from lambdas.get_data.main import lambda_handler as get_data
+from lambdas.get_predictions.main import lambda_handler as get_predictions
+from lambdas.get_station_map.main import lambda_handler as get_station_map
 
 app = FastAPI()
 
@@ -55,6 +55,26 @@ async def data(station: str = None, start_date: str = None, end_date: str = None
     response = get_data(event, None)
     return json.loads(response["body"])
 
+# Emulate /data/batch endpoint for multiple stations
+@app.get("/data/batch")
+@app.get("/api/data/batch")
+async def data_batch(stations: str = None, start_date: str = None, end_date: str = None,
+                     data_source: str = "default", show_anomalies: bool = False):
+    """Batch endpoint to fetch data for multiple stations in a single query"""
+    from lambdas.get_data.main import lambda_handler_batch
+
+    event = {
+        "queryStringParameters": {
+            "stations": stations,
+            "start_date": start_date,
+            "end_date": end_date,
+            "data_source": data_source,
+            "show_anomalies": str(show_anomalies).lower()
+        }
+    }
+    response = lambda_handler_batch(event, None)
+    return json.loads(response["body"])
+
 # Emulate /predictions endpoint
 @app.get("/predictions")
 async def predictions(station: str = None, model: str = "all"):
@@ -73,5 +93,10 @@ async def station_map():
 @app.get("/mapframe")
 async def mapframe():
     # Simulate the GOVMAP iframe content
-    with open("C:\Users\user01\Desktop\Ben\Sea_Level_Dash\Sea_Level_Dash_app\ScriptVersions\Aws React Version_30_7_25\Beckend\mapframe.html", "r") as f:
-        return f.read()
+    try:
+        with open("mapframe.html", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "<html><body><h1>Map frame not available</h1></body></html>"
+    except Exception as e:
+        return f"<html><body><h1>Error loading map frame: {e}</h1></body></html>"

@@ -152,7 +152,7 @@ class ApiService {
   async getData(params) {
     try {
       const queryParams = new URLSearchParams();
-      
+
       // Validate and add parameters
       if (params.station) queryParams.append('station', params.station);
       if (params.start_date) queryParams.append('start_date', params.start_date);
@@ -170,6 +170,52 @@ class ApiService {
         return [];
       }
       console.error('Error fetching data:', error);
+      return [];
+    }
+  }
+
+  async getDataBatch(stations, params) {
+    try {
+      const queryParams = new URLSearchParams();
+
+      // Stations as comma-separated string
+      if (Array.isArray(stations)) {
+        queryParams.append('stations', stations.join(','));
+      } else {
+        queryParams.append('stations', stations);
+      }
+
+      // Add other parameters
+      if (params.start_date) queryParams.append('start_date', params.start_date);
+      if (params.end_date) queryParams.append('end_date', params.end_date);
+      if (params.data_source) queryParams.append('data_source', params.data_source);
+      if (params.show_anomalies) queryParams.append('show_anomalies', params.show_anomalies);
+
+      const data = await this.request(`/api/data/batch?${queryParams}`);
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      // If batch endpoint fails, fall back to parallel individual requests
+      console.warn('Batch endpoint failed, falling back to parallel requests:', error);
+      return this.getDataParallel(stations, params);
+    }
+  }
+
+  async getDataParallel(stations, params) {
+    try {
+      // Parallel fetching for individual stations
+      const promises = stations.map(station =>
+        this.getData({ ...params, station }).catch(err => {
+          console.warn(`Failed to fetch data for ${station}:`, err);
+          return []; // Return empty array for failed station
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const allData = results.flat();
+
+      return allData;
+    } catch (error) {
+      console.error('Parallel fetching failed:', error);
       return [];
     }
   }
@@ -204,6 +250,32 @@ class ApiService {
     } catch (error) {
       console.error('Error checking health:', error);
       return { status: 'error', message: error.message };
+    }
+  }
+
+  async getOutliers(params) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params.station) queryParams.append('station', params.station);
+      if (params.start_date) queryParams.append('start_date', params.start_date);
+      if (params.end_date) queryParams.append('end_date', params.end_date);
+
+      const data = await this.request(`/api/outliers?${queryParams}`);
+      return {
+        outliers: Array.isArray(data.outliers) ? data.outliers : [],
+        total_records: data.total_records || 0,
+        outliers_detected: data.outliers_detected || 0,
+        outlier_percentage: data.outlier_percentage || 0
+      };
+    } catch (error) {
+      console.error('Error fetching outliers:', error);
+      return {
+        outliers: [],
+        total_records: 0,
+        outliers_detected: 0,
+        outlier_percentage: 0
+      };
     }
   }
 

@@ -18,7 +18,7 @@ try:
     from sqlalchemy import text
     DATABASE_AVAILABLE = True
 except ImportError as e:
-    print(f"❌ Database import error in get_predictions: {e}")
+    print(f"[ERROR] Database import error in get_predictions: {e}")
     DATABASE_AVAILABLE = False
 
 # Import Kalman filter module
@@ -27,7 +27,7 @@ try:
     KALMAN_AVAILABLE = True
 except ImportError as e:
     KALMAN_AVAILABLE = False
-    print(f"⚠️ Kalman filter not available: {e}")
+    print(f"[WARNING] Kalman filter not available: {e}")
 
 # Import fallback prediction libraries
 try:
@@ -35,14 +35,25 @@ try:
     ARIMA_AVAILABLE = True
 except ImportError:
     ARIMA_AVAILABLE = False
-    print("⚠️ ARIMA not available")
+    print("[WARNING] ARIMA not available")
 
 try:
     from prophet import Prophet
     PROPHET_AVAILABLE = True
 except ImportError:
     PROPHET_AVAILABLE = False
-    print("⚠️ Prophet not available")
+    print("[WARNING] Prophet not available")
+
+# Import baseline integration
+try:
+    from shared.baseline_integration import (
+        integrate_with_kalman_filter,
+        integrate_with_arima
+    )
+    BASELINE_INTEGRATION_AVAILABLE = True
+except ImportError:
+    logger.warning("Baseline integration not available for predictions")
+    BASELINE_INTEGRATION_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -172,6 +183,14 @@ def kalman_predict(station: str, steps: int = 240) -> Optional[List[Dict]]:
             logger.warning(f"Insufficient data for Kalman filter: {len(df)} points")
             return generate_simple_forecast(station, steps)
         
+        # INTEGRATE BASELINE RULES HERE
+        if BASELINE_INTEGRATION_AVAILABLE:
+            try:
+                df = integrate_with_kalman_filter(df, use_corrections=True)
+                logger.info(f"Applied baseline corrections for Kalman training: {station}")
+            except Exception as e:
+                logger.warning(f"Baseline integration failed: {e}")
+        
         # Configure model
         config = KalmanConfig(
             use_level=True,
@@ -248,6 +267,14 @@ def arima_predict(station: str, steps: int = 240) -> Optional[List[float]]:
         if df.empty or len(df) < 24:
             logger.warning(f"Not enough data for ARIMA prediction: {len(df)} points")
             return None
+        
+        # INTEGRATE BASELINE RULES HERE
+        if BASELINE_INTEGRATION_AVAILABLE:
+            try:
+                df = integrate_with_arima(df, use_corrections=True)
+                logger.info(f"Applied baseline corrections for ARIMA training: {station}")
+            except Exception as e:
+                logger.warning(f"Baseline integration failed: {e}")
         
         # Resample to hourly
         df = df.set_index('Tab_DateTime')

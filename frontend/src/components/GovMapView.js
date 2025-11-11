@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import moment from 'moment';
+import { format } from 'date-fns';
 import LeafletFallback from './LeafletFallback';
 
 const GovMapView = ({ filters, apiBaseUrl }) => {
@@ -12,18 +12,18 @@ const GovMapView = ({ filters, apiBaseUrl }) => {
     const fetchData = async () => {
       try {
         const response = await fetch(
-          `${apiBaseUrl}/data?station=${filters.station}&start_date=${moment(filters.startDate).format('YYYY-MM-DD')}&end_date=${moment(filters.endDate).format('YYYY-MM-DD')}&data_source=default`
+          `${apiBaseUrl}/data?station=${filters.station}&start_date=${format(filters.startDate, 'yyyy-MM-dd')}&end_date=${format(filters.endDate, 'yyyy-MM-dd')}&data_source=default`
         );
         const data = await response.json();
 
-        const stationsResponse = await fetch(`${apiBaseUrl}/stations/map?end_date=${moment(filters.endDate).format('YYYY-MM-DD')}`);
+        const stationsResponse = await fetch(`${apiBaseUrl}/stations/map?end_date=${format(filters.endDate, 'yyyy-MM-dd')}`);
         const stationsData = await stationsResponse.json();
 
         setMapData(stationsData);
         
         // Send date update message to iframe with delay
         if (iframeRef.current && iframeRef.current.contentWindow) {
-          const endDate = moment(filters.endDate).format('YYYY-MM-DD');
+          const endDate = format(filters.endDate, 'yyyy-MM-dd');
           console.log('Sending date update to iframe:', endDate);
           setTimeout(() => {
             iframeRef.current.contentWindow.postMessage(
@@ -121,8 +121,8 @@ const GovMapView = ({ filters, apiBaseUrl }) => {
   return (
     <iframe
       ref={iframeRef}
-      key={moment(filters.endDate).format('YYYY-MM-DD')}
-      src={`${apiBaseUrl}/mapframe?end_date=${moment(filters.endDate).format('YYYY-MM-DD')}`}
+      key={format(filters.endDate, 'yyyy-MM-dd')}
+      src={`${apiBaseUrl}/mapframe?end_date=${format(filters.endDate, 'yyyy-MM-dd')}`}
       style={{ 
         width: '100%', 
         height: '500px',

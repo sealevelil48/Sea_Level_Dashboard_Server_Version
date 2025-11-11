@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { Button, Modal } from 'react-bootstrap';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import moment from 'moment';
+import { format } from 'date-fns';
 import SeaForecastView from './SeaForecastView';
 
 // Fix for default marker icons
@@ -22,7 +22,7 @@ const LeafletFallback = ({ filters, apiBaseUrl }) => {
     const fetchData = async () => {
       try {
         const response = await fetch(
-          `${apiBaseUrl}/data?station=${filters.station}&start_date=${moment(filters.startDate).format('YYYY-MM-DD')}&end_date=${moment(filters.endDate).format('YYYY-MM-DD')}&data_source=default`
+          `${apiBaseUrl}/data?station=${filters.station}&start_date=${format(filters.startDate, 'yyyy-MM-dd')}&end_date=${format(filters.endDate, 'yyyy-MM-dd')}&data_source=default`
         );
         const data = await response.json();
 
@@ -44,7 +44,7 @@ const LeafletFallback = ({ filters, apiBaseUrl }) => {
         const mergedData = stationsData.map(station => ({
           ...station,
           latest_value: latestValues[station.Station]?.Tab_Value_mDepthC1 || 'N/A',
-          last_update: latestValues[station.Station]?.Tab_DateTime ? moment(latestValues[station.Station].Tab_DateTime).format('YYYY-MM-DD HH:mm') : 'N/A'
+          last_update: latestValues[station.Station]?.Tab_DateTime ? format(new Date(latestValues[station.Station].Tab_DateTime), 'yyyy-MM-dd HH:mm') : 'N/A'
         }));
 
         setMapData(mergedData);

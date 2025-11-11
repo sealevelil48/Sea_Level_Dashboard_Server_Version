@@ -14,7 +14,7 @@ try:
     from sqlalchemy import text
     DATABASE_AVAILABLE = True
 except ImportError as e:
-    print(f"❌ Database import error in get_live_data: {e}")
+    print(f"[ERROR] Database import error in get_live_data: {e}")
     DATABASE_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)

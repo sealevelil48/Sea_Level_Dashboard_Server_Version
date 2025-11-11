@@ -98,7 +98,7 @@ class OptimizedDatabaseManager:
                     'options': f'-c statement_timeout=30000'
                 }
             )
-            print("✅ OPTIMIZED Database engine created successfully")
+            print("[OK] OPTIMIZED Database engine created successfully")
         except Exception as e:
             logger.error(f"Failed to create database engine: {e}")
             self.engine = None
@@ -129,7 +129,7 @@ class OptimizedDatabaseManager:
             except:
                 pass  # Ignore if we can't set config
             
-            print("✅ Redis cache initialized")
+            print("[OK] Redis cache initialized")
             
         except Exception as e:
             logger.warning(f"Redis unavailable: {e}. Continuing without cache.")
@@ -158,10 +158,10 @@ class OptimizedDatabaseManager:
                           autoload_with=self.engine,
                           extend_existing=True)
             
-            logger.info("✅ Database tables loaded successfully.")
+            logger.info("[OK] Database tables loaded successfully.")
             
         except Exception as e:
-            logger.error(f"❌ Database initialization failed: {e}")
+            logger.error(f"[ERROR] Database initialization failed: {e}")
             self.M = self.L = self.S = None
     
     def health_check(self):
@@ -284,17 +284,17 @@ try:
         S = db_manager.S
         metadata = MetaData()
         
-        print("✅ OPTIMIZED Database connection established!")
+        print("[OK] OPTIMIZED Database connection established!")
     else:
-        print("⚠️  No database URI provided - running in demo mode")
+        print("[WARNING] No database URI provided - running in demo mode")
         db_manager = None
         engine = None
         M, L, S = None, None, None
         metadata = MetaData()
         
 except Exception as e:
-    logger.error(f"❌ Database setup failed: {e}")
-    print(f"❌ Database error: {e}")
+    logger.error(f"[ERROR] Database setup failed: {e}")
+    print(f"[ERROR] Database error: {e}")
     db_manager = None
     engine = None
     M, L, S = None, None, None

@@ -2,6 +2,7 @@ import json
 import logging
 import sys
 import os
+import math
 from datetime import datetime, timedelta
 
 # Add paths for shared modules
@@ -13,9 +14,9 @@ try:
     from shared.database import engine, M, L, S, db_manager
     from sqlalchemy import text
     DATABASE_AVAILABLE = True
-    print("✅ Database modules imported successfully for get_station_map")
+    print("[OK] Database modules imported successfully for get_station_map")
 except ImportError as e:
-    print(f"❌ Database import error in get_station_map: {e}")
+    print(f"[ERROR] Database import error in get_station_map: {e}")
     DATABASE_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +63,19 @@ def get_latest_station_data(end_date=None):
             stations = []
             
             for row in result:
+                # Handle NaN/infinite values
+                latest_val = float(row.latest_value) if row.latest_value is not None else 0.0
+                if math.isnan(latest_val) or math.isinf(latest_val):
+                    latest_val = 0.0
+                    
+                temp_val = None
+                if row.temperature is not None:
+                    temp_val = float(row.temperature)
+                    if math.isnan(temp_val) or math.isinf(temp_val):
+                        temp_val = None
+                    else:
+                        temp_val = round(temp_val, 1)
+                
                 station_data = {
                     "Station": row.Station,
                     "name": row.Station,
@@ -69,8 +83,8 @@ def get_latest_station_data(end_date=None):
                     "y": int(row.Y),
                     "longitude": float(row.Longitude),
                     "latitude": float(row.Latitude),
-                    "latest_value": round(float(row.latest_value), 3),
-                    "temperature": round(float(row.temperature), 1) if row.temperature else None,
+                    "latest_value": round(latest_val, 3),
+                    "temperature": temp_val,
                     "last_update": row.last_update.strftime('%Y-%m-%d %H:%M')
                 }
                 stations.append(station_data)
@@ -80,12 +94,12 @@ def get_latest_station_data(end_date=None):
                 # Return fallback data with current timestamp
                 current_time = datetime.now().strftime('%Y-%m-%d %H:%M')
                 return [
-                    {"Station": "Acre", "name": "Acre", "x": 206907, "y": 758285, "longitude": 35.070281, "latitude": 32.919482, "latest_value": 0.478, "last_update": current_time},
-                    {"Station": "Ashdod", "name": "Ashdod", "x": 166075, "y": 637753, "longitude": 34.640522, "latitude": 31.831303, "latest_value": 0.512, "last_update": current_time},
-                    {"Station": "Ashkelon", "name": "Ashkelon", "x": 158044, "y": 621218, "longitude": 34.556778, "latitude": 31.681832, "latest_value": 0.445, "last_update": current_time},
-                    {"Station": "Eilat", "name": "Eilat", "x": 191654, "y": 379381, "longitude": 34.917692, "latitude": 29.501767, "latest_value": 0.389, "last_update": current_time},
-                    {"Station": "Haifa", "name": "Haifa", "x": 199451, "y": 748207, "longitude": 34.990936, "latitude": 32.828428, "latest_value": 0.523, "last_update": current_time},
-                    {"Station": "Yafo", "name": "Yafo", "x": 176505, "y": 662250, "longitude": 34.74964, "latitude": 32.052552, "latest_value": 0.467, "last_update": current_time}
+                    {"Station": "Acre", "name": "Acre", "x": 206907, "y": 758285, "longitude": 35.070281, "latitude": 32.919482, "latest_value": 0.478, "temperature": 22.5, "last_update": current_time},
+                    {"Station": "Ashdod", "name": "Ashdod", "x": 166075, "y": 637753, "longitude": 34.640522, "latitude": 31.831303, "latest_value": 0.512, "temperature": 23.1, "last_update": current_time},
+                    {"Station": "Ashkelon", "name": "Ashkelon", "x": 158044, "y": 621218, "longitude": 34.556778, "latitude": 31.681832, "latest_value": 0.445, "temperature": 22.8, "last_update": current_time},
+                    {"Station": "Eilat", "name": "Eilat", "x": 191654, "y": 379381, "longitude": 34.917692, "latitude": 29.501767, "latest_value": 0.389, "temperature": 25.2, "last_update": current_time},
+                    {"Station": "Haifa", "name": "Haifa", "x": 199451, "y": 748207, "longitude": 34.990936, "latitude": 32.828428, "latest_value": 0.523, "temperature": 22.3, "last_update": current_time},
+                    {"Station": "Yafo", "name": "Yafo", "x": 176505, "y": 662250, "longitude": 34.74964, "latitude": 32.052552, "latest_value": 0.467, "temperature": 23.0, "last_update": current_time}
                 ]
             
             logger.info(f"Retrieved {len(stations)} stations with latest data")
@@ -96,12 +110,12 @@ def get_latest_station_data(end_date=None):
         # Return fallback data with current timestamp
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M')
         return [
-            {"Station": "Acre", "name": "Acre", "x": 206907, "y": 758285, "longitude": 35.070281, "latitude": 32.919482, "latest_value": 0.478, "last_update": current_time},
-            {"Station": "Ashdod", "name": "Ashdod", "x": 166075, "y": 637753, "longitude": 34.640522, "latitude": 31.831303, "latest_value": 0.512, "last_update": current_time},
-            {"Station": "Ashkelon", "name": "Ashkelon", "x": 158044, "y": 621218, "longitude": 34.556778, "latitude": 31.681832, "latest_value": 0.445, "last_update": current_time},
-            {"Station": "Eilat", "name": "Eilat", "x": 191654, "y": 379381, "longitude": 34.917692, "latitude": 29.501767, "latest_value": 0.389, "last_update": current_time},
-            {"Station": "Haifa", "name": "Haifa", "x": 199451, "y": 748207, "longitude": 34.990936, "latitude": 32.828428, "latest_value": 0.523, "last_update": current_time},
-            {"Station": "Yafo", "name": "Yafo", "x": 176505, "y": 662250, "longitude": 34.74964, "latitude": 32.052552, "latest_value": 0.467, "last_update": current_time}
+            {"Station": "Acre", "name": "Acre", "x": 206907, "y": 758285, "longitude": 35.070281, "latitude": 32.919482, "latest_value": 0.478, "temperature": 22.5, "last_update": current_time},
+            {"Station": "Ashdod", "name": "Ashdod", "x": 166075, "y": 637753, "longitude": 34.640522, "latitude": 31.831303, "latest_value": 0.512, "temperature": 23.1, "last_update": current_time},
+            {"Station": "Ashkelon", "name": "Ashkelon", "x": 158044, "y": 621218, "longitude": 34.556778, "latitude": 31.681832, "latest_value": 0.445, "temperature": 22.8, "last_update": current_time},
+            {"Station": "Eilat", "name": "Eilat", "x": 191654, "y": 379381, "longitude": 34.917692, "latitude": 29.501767, "latest_value": 0.389, "temperature": 25.2, "last_update": current_time},
+            {"Station": "Haifa", "name": "Haifa", "x": 199451, "y": 748207, "longitude": 34.990936, "latitude": 32.828428, "latest_value": 0.523, "temperature": 22.3, "last_update": current_time},
+            {"Station": "Yafo", "name": "Yafo", "x": 176505, "y": 662250, "longitude": 34.74964, "latitude": 32.052552, "latest_value": 0.467, "temperature": 23.0, "last_update": current_time}
         ]
 
 def lambda_handler(event, context):
