@@ -383,10 +383,101 @@ async def get_data(
     data_source: str = "default",
     limit: int = 15000
 ):
-    """Get historical data with pagination and caching"""
+    """Get historical data with pagination and caching
+
+    Args:
+        station: Station name or "All Stations" (default)
+        start_date: Start date in YYYY-MM-DD format (default: 7 days ago)
+        end_date: End date in YYYY-MM-DD format (default: today)
+        data_source: Data source type (default: "default")
+        limit: Maximum number of records (default: 15000)
+
+    Returns:
+        JSON array of data records
+    """
     try:
         # Add performance monitoring
         start_time = time.time()
+
+        # ====================================================================================
+        # VALIDATION AND DEFAULT VALUES
+        # ====================================================================================
+
+        # 1. Provide default dates if not specified (last 7 days)
+        if not start_date or not end_date:
+            from datetime import datetime, timedelta
+            today = datetime.now()
+            if not end_date:
+                end_date = today.strftime('%Y-%m-%d')
+            if not start_date:
+                start_date = (today - timedelta(days=7)).strftime('%Y-%m-%d')
+            logger.info(f"[DEFAULT DATES] Using default date range: {start_date} to {end_date}")
+
+        # 2. Validate date formats
+        try:
+            from datetime import datetime
+            datetime.strptime(start_date, '%Y-%m-%d')
+            datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError as e:
+            logger.error(f"[VALIDATION ERROR] Invalid date format: {e}")
+            return JSONResponse(
+                content={
+                    "error": "Invalid date format. Use YYYY-MM-DD format.",
+                    "example": "2025-11-01",
+                    "provided_start_date": start_date,
+                    "provided_end_date": end_date
+                },
+                status_code=400
+            )
+
+        # 3. Validate date range (max 365 days for safety)
+        from datetime import datetime
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        days_diff = (end_dt - start_dt).days
+
+        if days_diff < 0:
+            return JSONResponse(
+                content={"error": "start_date must be before end_date"},
+                status_code=400
+            )
+
+        if days_diff > 365:
+            return JSONResponse(
+                content={
+                    "error": "Date range too large. Maximum 365 days allowed.",
+                    "requested_days": days_diff,
+                    "max_days": 365
+                },
+                status_code=400
+            )
+
+        # 4. Validate station name (optional - check against known stations)
+        if station and station != "All Stations":
+            # Get list of valid stations
+            try:
+                from shared.database import L
+                from sqlalchemy import select
+                with engine.connect() as conn:
+                    valid_stations = [row[0] for row in conn.execute(select(L.Station).distinct()).fetchall()]
+
+                    if station not in valid_stations:
+                        logger.warning(f"[VALIDATION WARNING] Station '{station}' not found in database")
+                        return JSONResponse(
+                            content={
+                                "error": f"Station '{station}' not found",
+                                "valid_stations": valid_stations,
+                                "hint": "Use 'All Stations' to get data from all stations"
+                            },
+                            status_code=404
+                        )
+            except Exception as validation_error:
+                # If validation fails, log but continue (database might be unavailable)
+                logger.warning(f"[VALIDATION SKIP] Could not validate station: {validation_error}")
+
+        # ====================================================================================
+        # EXECUTE REQUEST
+        # ====================================================================================
 
         event = {
             "httpMethod": "GET",
@@ -419,6 +510,8 @@ async def get_data(
         return result
     except Exception as e:
         logger.error(f"Error in get_data: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JSONResponse(
             content={"error": str(e), "data": []},
             status_code=500

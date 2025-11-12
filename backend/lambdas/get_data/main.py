@@ -64,20 +64,19 @@ def calculate_aggregation_level(start_date, end_date):
     """Determine optimal aggregation level based on date range"""
     if not start_date or not end_date:
         return 'raw', None
-    
+
     try:
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
         days = (end_dt - start_dt).days
-        
-        if days <= 7:
+
+        # CHANGED: Always use raw (1-minute) data for up to 30 days
+        if days <= 30:
             return 'raw', None
-        elif days <= 30:
-            return 'hourly', '1 hour'
         elif days <= 90:
-            return 'hourly', '3 hours'
+            return 'hourly', '1 hour'
         elif days <= 180:
-            return 'daily', '1 day'
+            return 'hourly', '3 hours'
         elif days <= 365:
             return 'daily', '1 day'
         else:

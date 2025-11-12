@@ -48,6 +48,12 @@ function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [forecastPage, setForecastPage] = useState(1);
   const [itemsPerPage] = useState(50);
+
+  // Sorting state for table
+  const [sortConfig, setSortConfig] = useState({
+    key: 'Tab_DateTime',
+    direction: 'desc' // Default to DESC (newest first)
+  });
   
   // Refs for component state
   const plotRef = useRef(null);
@@ -277,16 +283,22 @@ function Dashboard() {
   }, [filters.predictionModels, filters.forecastHours]);
 
   // Memoize filter values to prevent unnecessary re-renders
-  const filterValues = useMemo(() => ({
-    startDate: filters.startDate.toISOString().split('T')[0],
-    endDate: filters.endDate.toISOString().split('T')[0],
-    dataType: filters.dataType,
-    showAnomalies: filters.showAnomalies,
-    trendline: filters.trendline,
-    analysisType: filters.analysisType
-  }), [
+  const filterValues = useMemo(() => {
+    // Add 1 day to endDate to include data from the start of the next day (00:00)
+    const adjustedEndDate = new Date(filters.endDate);
+    adjustedEndDate.setDate(adjustedEndDate.getDate() + 1);
+
+    return {
+      startDate: filters.startDate.toISOString().split('T')[0],
+      endDate: adjustedEndDate.toISOString().split('T')[0], // Now includes next day (00:00)
+      dataType: filters.dataType,
+      showAnomalies: filters.showAnomalies,
+      trendline: filters.trendline,
+      analysisType: filters.analysisType
+    };
+  }, [
     filters.startDate,
-    filters.endDate, 
+    filters.endDate,
     filters.dataType,
     filters.showAnomalies,
     filters.trendline,
@@ -335,7 +347,7 @@ function Dashboard() {
     return {
       x: data.map(d => d.Tab_DateTime),
       y: rollingAvg,
-      type: 'scatter',
+      type: 'scattergl', // WebGL for better performance with large datasets
       mode: 'lines',
       name: config.name,
       line: { 
@@ -622,24 +634,18 @@ function Dashboard() {
       }
 
       if (Array.isArray(allData) && allData.length > 0) {
-        // ✅ FIX 1.2: Smart data downsampling BEFORE setState
-        const MAX_POINTS = 2000;
-        const optimizedData = allData.length > MAX_POINTS 
-          ? allData.filter((_, i) => i % Math.ceil(allData.length / MAX_POINTS) === 0)
-          : allData;
-        
-        console.log(`⚡ Data optimized: ${allData.length} → ${optimizedData.length} points`);
-        
-        setGraphData(optimizedData);
-        
-        // ✅ REMOVED trendline/analysis calculation from fetchData to prevent infinite loop
-        // These will be calculated in createPlot memoization instead
-        const enrichedData = optimizedData;
-        
-        setTableData(enrichedData.sort((a, b) => {
+        // ✅ Both graph and table now use full raw 1-minute data
+        // Performance is maintained by using scattergl (WebGL) renderer
+        console.log(`📊 Raw data loaded: ${allData.length} 1-minute interval records`);
+
+        // Both graph and table use full raw data
+        setGraphData(allData);
+
+        // Sort data in DESC order by default (newest first)
+        setTableData(allData.sort((a, b) => {
           const dateA = a.Tab_DateTime || a.Date;
           const dateB = b.Tab_DateTime || b.Date;
-          return dateA.localeCompare(dateB); // ISO date strings can be compared directly
+          return dateB.localeCompare(dateA); // DESC: newest data first
         }));
         setCurrentPage(1);
         
@@ -802,6 +808,60 @@ function Dashboard() {
     }
   };
 
+  // Handle sorting for table columns
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+    setCurrentPage(1); // Reset to first page when sorting
+  };
+
+  // Sort table data based on sortConfig
+  const sortedTableData = useMemo(() => {
+    if (!tableData || tableData.length === 0) return [];
+
+    const sorted = [...tableData].sort((a, b) => {
+      let aValue, bValue;
+
+      if (sortConfig.key === 'Tab_DateTime') {
+        aValue = a.Tab_DateTime || a.Date || '';
+        bValue = b.Tab_DateTime || b.Date || '';
+      } else if (sortConfig.key === 'Station') {
+        aValue = a.Station || '';
+        bValue = b.Station || '';
+      } else {
+        return 0;
+      }
+
+      // String comparison
+      if (sortConfig.direction === 'asc') {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
+      }
+    });
+
+    return sorted;
+  }, [tableData, sortConfig]);
+
+  // Render sortable column header
+  const renderSortableHeader = (label, key) => {
+    const isSorted = sortConfig.key === key;
+    const sortIcon = isSorted ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ' ⇅';
+
+    return (
+      <th
+        onClick={() => handleSort(key)}
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+        title={`Click to sort by ${label}`}
+      >
+        {label}{sortIcon}
+      </th>
+    );
+  };
+
   // Enhanced plot creation with Kalman support - memoized for performance
   const createPlot = useMemo(() => {
     if (!graphData || graphData.length === 0) {
@@ -864,7 +924,7 @@ function Dashboard() {
           traces.push({
             x: data.map(d => d.Tab_DateTime),
             y: data.map(d => d.Tab_Value_mDepthC1),
-            type: 'scatter',
+            type: 'scattergl', // WebGL for better performance with large datasets
             mode: 'lines',
             name: station,
             line: { 
@@ -881,7 +941,7 @@ function Dashboard() {
             traces.push({
               x: stationData.map(d => d.Tab_DateTime),
               y: stationData.map(d => d.Tab_Value_mDepthC1),
-              type: 'scatter',
+              type: 'scattergl', // WebGL for better performance with large datasets
               mode: 'lines',
               name: station,
               line: { 
@@ -1269,8 +1329,8 @@ function Dashboard() {
           overflow: 'hidden' 
         }}>
           <iframe
-            key={`govmap-${filters.endDate.toISOString().split('T')[0]}`}
-            src={`${API_BASE_URL}/mapframe?end_date=${filters.endDate.toISOString().split('T')[0]}`}
+            key={`govmap-${filterValues.endDate}`}
+            src={`${API_BASE_URL}/mapframe?end_date=${filterValues.endDate}`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="GovMap"
             allow="geolocation; accelerometer; clipboard-write"
@@ -1301,7 +1361,7 @@ function Dashboard() {
       );
     }
     return null;
-  }, [mapTab, stations, selectedStations, graphData, filters.endDate, forecastData, govmapReady]);
+  }, [mapTab, stations, selectedStations, graphData, filterValues.endDate, forecastData, govmapReady]);
 
   return (
     <ErrorBoundary>
@@ -1768,8 +1828,8 @@ function Dashboard() {
                               <table className="table table-dark table-striped table-sm">
                                 <thead>
                                   <tr>
-                                    <th>Date/Time</th>
-                                    <th>Station</th>
+                                    {renderSortableHeader('Date/Time', 'Tab_DateTime')}
+                                    {renderSortableHeader('Station', 'Station')}
                                     {filters.dataType === 'tides' ? (
                                       <>
                                         <th>High Tide (m)</th>
@@ -1787,7 +1847,7 @@ function Dashboard() {
                                   </tr>
                                 </thead>
                             <tbody>
-                              {tableData
+                              {sortedTableData
                                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                                 .map((row, idx) => (
                                 <tr key={idx}>
@@ -1813,10 +1873,10 @@ function Dashboard() {
                           </table>
                           <div className="d-flex justify-content-between align-items-center mt-3">
                             <span className="text-muted">
-                              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, tableData.length)} of {tableData.length} entries
+                              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, sortedTableData.length)} of {sortedTableData.length} entries
                             </span>
                             <div>
-                              <Button 
+                              <Button
                                 variant="outline-primary"
                                 size="sm"
                                 className="me-2"
@@ -1825,13 +1885,13 @@ function Dashboard() {
                               >
                                 Previous
                               </Button>
-                              <span className="mx-2">Page {currentPage} of {Math.ceil(tableData.length / itemsPerPage)}</span>
-                              <Button 
+                              <span className="mx-2">Page {currentPage} of {Math.ceil(sortedTableData.length / itemsPerPage)}</span>
+                              <Button
                                 variant="outline-primary"
                                 size="sm"
                                 className="ms-2"
-                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(tableData.length / itemsPerPage)))}
-                                disabled={currentPage === Math.ceil(tableData.length / itemsPerPage)}
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(sortedTableData.length / itemsPerPage)))}
+                                disabled={currentPage === Math.ceil(sortedTableData.length / itemsPerPage)}
                               >
                                 Next
                               </Button>
